@@ -1,3 +1,5 @@
+import asyncio
+import time
 from dataclasses import dataclass
 from types import TracebackType
 from typing import (
@@ -72,9 +74,10 @@ class SyncHttpIO:
         try:
             http_request = next(iterator)
             while True:
-                response = self.session.send(
-                    http_request.finalize(base_url, default_headers)
-                )
+                request = http_request.finalize(base_url, default_headers)
+                if request.delay:
+                    time.sleep(request.delay)
+                response = self.session.send(request)
                 http_request = iterator.send(response)
         except StopIteration:
             return return_value_iterator.return_value
@@ -95,9 +98,11 @@ class AsyncHttpIO:
         try:
             http_request = next(iterator)
             while True:
-                response = await self.session.send(
-                    http_request.finalize(base_url, default_headers)
-                )
+                request = http_request.finalize(base_url, default_headers)
+                if request.delay:
+                    await asyncio.sleep(request.delay)
+                response = await self.session.send(request)
+                print(response)
                 http_request = iterator.send(response)
         except StopIteration:
             return return_value_iterator.return_value

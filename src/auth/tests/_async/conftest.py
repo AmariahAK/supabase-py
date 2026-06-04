@@ -115,14 +115,14 @@ http_sessions = [httpx, aiohttp]
 
 @pytest.fixture
 async def admin_client_with_user_and_credentials(
-    service_role_api_client: AsyncSupabaseAuthAdmin,
+    secret_key_api_client: AsyncSupabaseAuthAdmin,
 ) -> AsyncGenerator[tuple[AsyncSupabaseAuthAdmin, User, Credentials]]:
     credentials = mock_user_credentials()
-    response = await service_role_api_client.create_user(
+    response = await secret_key_api_client.create_user(
         AdminUserAttributes(email=credentials.email, password=credentials.password)
     )
-    yield (service_role_api_client, response.user, credentials)
-    await service_role_api_client.delete_user(response.user.id)
+    yield (secret_key_api_client, response.user, credentials)
+    await secret_key_api_client.delete_user(response.user.id)
 
 
 @pytest.fixture(params=http_sessions)
@@ -256,7 +256,7 @@ async def auth_admin_api_auto_confirm_disabled_client(
         yield client
 
 
-SERVICE_ROLE_JWT = encode(
+SECRET_KEY_JWT = encode(
     {
         "role": "service_role",
     },
@@ -265,13 +265,13 @@ SERVICE_ROLE_JWT = encode(
 
 
 @pytest.fixture(params=http_sessions)
-async def service_role_api_client(
+async def secret_key_api_client(
     request: pytest.FixtureRequest,
 ) -> AsyncGenerator[AsyncSupabaseAuthAdmin]:
     async with AsyncSupabaseAuthAdmin(
         url=GOTRUE_URL_SIGNUP_ENABLED_AUTO_CONFIRM_ON,
         default_headers={
-            "Authorization": f"Bearer {SERVICE_ROLE_JWT}",
+            "Authorization": f"Bearer {SECRET_KEY_JWT}",
         },
         http_session=request.param(),
     ) as client:
@@ -279,13 +279,13 @@ async def service_role_api_client(
 
 
 @pytest.fixture(params=http_sessions)
-async def service_role_api_client_with_sms(
+async def secret_key_api_client_with_sms(
     request: pytest.FixtureRequest,
 ) -> AsyncGenerator[AsyncSupabaseAuthAdmin]:
     async with AsyncSupabaseAuthAdmin(
         url=GOTRUE_URL_SIGNUP_ENABLED_AUTO_CONFIRM_OFF,
         default_headers={
-            "Authorization": f"Bearer {SERVICE_ROLE_JWT}",
+            "Authorization": f"Bearer {SECRET_KEY_JWT}",
         },
         http_session=request.param(),
     ) as client:
@@ -293,13 +293,13 @@ async def service_role_api_client_with_sms(
 
 
 @pytest.fixture(params=http_sessions)
-async def service_role_api_client_no_sms(
+async def secret_key_api_client_no_sms(
     request: pytest.FixtureRequest,
 ) -> AsyncGenerator[AsyncSupabaseAuthAdmin]:
     async with AsyncSupabaseAuthAdmin(
         url=GOTRUE_URL_SIGNUP_DISABLED_AUTO_CONFIRM_OFF,
         default_headers={
-            "Authorization": f"Bearer {SERVICE_ROLE_JWT}",
+            "Authorization": f"Bearer {SECRET_KEY_JWT}",
         },
         http_session=request.param(),
     ) as client:

@@ -3,15 +3,14 @@ from typing import Iterable
 import pytest
 from supabase_utils.http.headers import Headers
 from supabase_utils.http.query import URLQuery
-from supabase_utils.http.request import JSONRequest
 
-from postgrest.request_builder import BaseFilterRequestBuilder
+from postgrest.request_builder import BaseFilterRequestBuilder, PostgrestRequest
 from postgrest.utils import sanitize_param
 
 
 @pytest.fixture
 def filter_request_builder() -> Iterable[BaseFilterRequestBuilder]:
-    request = JSONRequest(
+    request = PostgrestRequest(
         path=["example_table"],
         method="GET",
         headers=Headers.empty(),

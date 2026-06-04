@@ -417,6 +417,7 @@ def test_client_create_signed_url(
 
     # Test basic signed URL
     signed_url = storage_file_client.create_signed_url(file.bucket_path, 60)
+    assert signed_url
     with HttpxClient(timeout=None) as client:
         response = client.get(signed_url)
     response.raise_for_status()
@@ -426,6 +427,7 @@ def test_client_create_signed_url(
     download_signed_url = storage_file_client.create_signed_url(
         file.bucket_path, 60, download="custom_download.svg"
     )
+    assert download_signed_url
     with HttpxClient(timeout=None) as client:
         response = client.get(download_signed_url)
 
@@ -446,6 +448,7 @@ def test_client_create_signed_url(
     # assert "height=200" in transform_signed_url["signedURL"]
     # assert "resize=cover" in transform_signed_url["signedURL"]
     # assert "format=png" in transform_signed_url["signedURL"]
+    assert transform_signed_url
     with HttpxClient(timeout=None) as client:
         response = client.get(transform_signed_url)
     response.raise_for_status()
@@ -467,6 +470,7 @@ def test_client_create_signed_urls(
 
     with HttpxClient() as client:
         for url in signed_urls:
+            assert url.signed_url
             response = client.get(url.signed_url)
             response.raise_for_status()
             assert response.content == multi_file[0].file_content
@@ -691,6 +695,7 @@ def test_client_create_signed_urls_with_download(
 
     with HttpxClient() as client:
         for i, url in enumerate(signed_urls):
+            assert url.signed_url
             response = client.get(url.signed_url)
             response.raise_for_status()
             assert response.content == multi_file[i].file_content

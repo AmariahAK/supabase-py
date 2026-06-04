@@ -173,7 +173,7 @@ class UploadResponse(BaseModel):
 class CreateSignedUrlResponse:
     error: str | None
     path: str
-    signed_url: str
+    signed_url: str | None
 
 
 class SignedUrlJsonResponse(BaseModel, extra="ignore"):
@@ -183,7 +183,7 @@ class SignedUrlJsonResponse(BaseModel, extra="ignore"):
 class SignedUrlsJsonItem(BaseModel, extra="ignore"):
     error: str | None
     path: str
-    signedURL: str
+    signedURL: str | None
 
 
 SignedUrlsJsonResponse = TypeAdapter(list[SignedUrlsJsonItem])

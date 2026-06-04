@@ -32,6 +32,7 @@ def valid_request() -> Request:
         method="GET",
         headers=Headers.empty(),
         content=None,
+        delay=None,
     )
 
 

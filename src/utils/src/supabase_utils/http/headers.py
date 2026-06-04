@@ -37,7 +37,7 @@ class Headers:
         return None
 
     def get_list(self, key: str) -> list[str] | None:
-        if val := self._map.get(key, None):
+        if val := self._map.get(key.lower(), None):
             return list(val)
         return None
 

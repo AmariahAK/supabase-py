@@ -244,6 +244,7 @@ class UserAttributes(BaseModel):
     password: str | None = None
     data: JSON = None
     nonce: str | None = None
+    current_password: str | None = None
 
 
 class AdminUserAttributes(UserAttributes):

@@ -250,7 +250,11 @@ class StorageFileApiClient(Generic[HttpIO]):
         signed_urls = []
         for item in data:
             # Prepare URL
-            url = self._make_signed_url(item.signedURL, download_query)
+            url = (
+                self._make_signed_url(item.signedURL, download_query)
+                if item.signedURL
+                else None
+            )
             signed_item = CreateSignedUrlResponse(
                 error=item.error,
                 path=item.path,

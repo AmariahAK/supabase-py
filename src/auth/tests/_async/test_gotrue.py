@@ -164,8 +164,9 @@ async def test_set_session_with_expired_token(
     expired_token = access_token.split(".")
     payload = decode_jwt(access_token).payload
     payload.exp = int(time.time()) - 3600  # Set expiry to 1 hour ago
+    print(payload)
     expired_token[1] = encode(
-        dict(payload), GOTRUE_JWT_SECRET, algorithm="HS256"
+        payload.model_dump(exclude_none=True), GOTRUE_JWT_SECRET, algorithm="HS256"
     ).split(".")[1]
     expired_access_token = ".".join(expired_token)
 
@@ -202,7 +203,7 @@ async def test_set_session_without_refresh_token(
     payload = decode_jwt(access_token).payload
     payload.exp = int(time.time()) - 3600  # Set expiry to 1 hour ago
     expired_token[1] = encode(
-        dict(payload), GOTRUE_JWT_SECRET, algorithm="HS256"
+        payload.model_dump(exclude_none=True), GOTRUE_JWT_SECRET, algorithm="HS256"
     ).split(".")[1]
     expired_access_token = ".".join(expired_token)
 

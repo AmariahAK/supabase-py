@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.30.1](https://github.com/supabase/supabase-py/compare/v2.30.0...v2.30.1) (2026-05-27)
+
+
+### Documentation
+
+* fix GitHub Issues link in CONTRIBUTING ([#1493](https://github.com/supabase/supabase-py/issues/1493)) ([01377f7](https://github.com/supabase/supabase-py/commit/01377f7f2fe13d7b990ab934cdc5c07bdab651a4))
+
+## [2.30.0](https://github.com/supabase/supabase-py/compare/v2.29.0...v2.30.0) (2026-05-06)
+
+
+### Features
+
+* **auth:** add current_password to UserAttributes ([#1475](https://github.com/supabase/supabase-py/issues/1475)) ([13df40b](https://github.com/supabase/supabase-py/commit/13df40b9cafd332e56ca816a0406ac31e4a3fc4b))
+* **postgrest:** allow select() chaining on write builders ([#1383](https://github.com/supabase/supabase-py/issues/1383)) ([3ed928c](https://github.com/supabase/supabase-py/commit/3ed928c84656872208b42b3462b03efbd491f0e5))
+* **postgrest:** use model_construct to avoid validating twice ([#1484](https://github.com/supabase/supabase-py/issues/1484)) ([107bf4e](https://github.com/supabase/supabase-py/commit/107bf4e824bd731f13a252f37a7ae9518b56c8ff))
+
+## [2.29.0](https://github.com/supabase/supabase-py/compare/v2.28.3...v2.29.0) (2026-04-22)
+
+
+### Features
+
+* **postgrest:** add retry logic on cloudflare errors ([#1449](https://github.com/supabase/supabase-py/issues/1449)) ([a282549](https://github.com/supabase/supabase-py/commit/a2825494a7ed20f35918ef0a02d5024d1a389fa2))
+
+
+### Bug Fixes
+
+* **storage:** make signedURL an optional string ([#1461](https://github.com/supabase/supabase-py/issues/1461)) ([611cdbb](https://github.com/supabase/supabase-py/commit/611cdbb6046601c973a106303146e4faa50b7756))
+
 ## [2.28.3](https://github.com/supabase/supabase-py/compare/v2.28.2...v2.28.3) (2026-03-20)
 
 

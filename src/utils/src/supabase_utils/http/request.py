@@ -23,6 +23,7 @@ class Request:
     method: HTTPRequestMethod
     headers: Headers
     content: bytes | None
+    delay: float | None
 
 
 @dataclass
@@ -49,6 +50,7 @@ class ToRequest(Protocol):
 class EmptyRequest:
     path: List[str]
     method: HTTPRequestMethod
+    delay: float | None = field(default=None, kw_only=True)
     headers: Headers = field(default_factory=Headers.empty, kw_only=True)
     query: URLQuery = field(default_factory=URLQuery.empty, kw_only=True)
 
@@ -58,6 +60,7 @@ class EmptyRequest:
             url=base_url.joinpath(*self.path).with_query(self.query.as_query()),
             headers=default_headers.update(self.headers),
             content=None,
+            delay=self.delay,
         )
 
 
@@ -74,6 +77,7 @@ class BytesRequest(EmptyRequest):
             url=base_url.joinpath(*self.path).with_query(self.query.as_query()),
             headers=headers,
             content=self.body,
+            delay=self.delay,
         )
 
 
@@ -97,6 +101,7 @@ class JSONRequest(EmptyRequest):
             url=base_url.joinpath(*self.path).with_query(self.query.as_query()),
             headers=headers,
             content=content,
+            delay=self.delay,
         )
 
 
@@ -113,6 +118,7 @@ class TextRequest(EmptyRequest):
             url=base_url.joinpath(*self.path).with_query(self.query.as_query()),
             headers=headers,
             content=self.text.encode("utf-8"),
+            delay=self.delay,
         )
 
 
@@ -198,4 +204,5 @@ class MultipartFormDataRequest(EmptyRequest):
             url=base_url.joinpath(*self.path).with_query(self.query.as_query()),
             headers=headers,
             content=content,
+            delay=self.delay,
         )

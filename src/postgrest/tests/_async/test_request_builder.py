@@ -15,7 +15,7 @@ from postgrest.request_builder import (
     SingleAPIResponse,
     TextRequestBuilder,
 )
-from postgrest.types import CountMethod
+from postgrest.types import CountMethod, ReturnMethod
 
 
 @pytest.fixture
@@ -138,6 +138,24 @@ class TestInsert:
         assert builder.request.method == "POST"
         assert builder.request.body == {"key1": "val1"}
 
+    def test_insert_with_select(self, request_builder: RequestBuilder[AsyncHttpIO]):
+        builder = request_builder.insert({"key1": "val1"}).select("id", "key1")
+
+        assert builder.request.query["select"] == "id,key1"
+        assert builder.request.headers.get_list("prefer") == ["return=representation"]
+
+    def test_insert_with_select_forces_representation(
+        self, request_builder: RequestBuilder[AsyncHttpIO]
+    ):
+        builder = request_builder.insert(
+            {"key1": "val1"}, returning=ReturnMethod.minimal
+        ).select("id")
+
+        assert builder.request.query["select"] == "id"
+        assert builder.request.headers.get_list("prefer") == [
+            "return=representation",
+        ]
+
     def test_bulk_upsert_with_default(
         self, request_builder: RequestBuilder[AsyncHttpIO]
     ) -> None:
@@ -190,6 +208,12 @@ class TestUpdate:
         assert builder.request.method == "PATCH"
         assert builder.request.body == {"key1": "val1"}
 
+    def test_update_with_select(self, request_builder: RequestBuilder[AsyncHttpIO]):
+        builder = request_builder.update({"key1": "val1"}).eq("id", 1).select("id")
+
+        assert builder.request.query["id"] == "eq.1"
+        assert builder.request.query["select"] == "id"
+
 
 class TestDelete:
     def test_delete(self, request_builder: RequestBuilder[AsyncHttpIO]) -> None:
@@ -221,6 +245,12 @@ class TestDelete:
         assert "return=representation" in builder.request.headers["prefer"]
         assert builder.request.method == "DELETE"
         assert builder.request.body == {}
+
+    def test_delete_with_select(self, request_builder: RequestBuilder[AsyncHttpIO]):
+        builder = request_builder.delete().eq("id", 1).select("id")
+
+        assert builder.request.query["id"] == "eq.1"
+        assert builder.request.query["select"] == "id"
 
 
 class TestTextSearch:
@@ -399,6 +429,7 @@ def request_response_without_prefer_header() -> Response:
             url=URL("http://example.com"),
             content=None,
             headers=Headers.empty(),
+            delay=None,
         ),
         content=b"",
         headers=Headers.empty(),
@@ -418,6 +449,7 @@ def request_response_with_prefer_header_without_count(
             url=URL("http://example.com"),
             headers=Headers.from_mapping({"prefer": prefer_header_without_count}),
             content=None,
+            delay=None,
         ),
     )
 
@@ -437,6 +469,7 @@ def request_response_with_prefer_header_with_count_and_content_range(
             url=URL("http://example.com"),
             headers=Headers.from_mapping({"prefer": prefer_header_with_count}),
             content=None,
+            delay=None,
         ),
     )
 
@@ -458,6 +491,7 @@ def request_response_with_data(
             url=URL("http://example.com"),
             headers=Headers.from_mapping({"prefer": prefer_header_with_count}),
             content=None,
+            delay=None,
         ),
     )
 
@@ -479,6 +513,7 @@ def request_response_with_single_data(
             url=URL("http://example.com"),
             headers=Headers.from_mapping({"prefer": prefer_header_with_count}),
             content=None,
+            delay=None,
         ),
     )
 
@@ -494,6 +529,7 @@ def request_response_with_csv_data(csv_api_response: str) -> Response:
             url=URL("http://example.com"),
             headers=Headers.empty(),
             content=None,
+            delay=None,
         ),
     )
 

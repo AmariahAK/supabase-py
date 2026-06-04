@@ -589,3 +589,122 @@ async def test_order_on_foreign_table(postgrest_client: AsyncPostgrestClient) ->
         {"name": "strings", "instruments": [{"name": "violin"}, {"name": "harp"}]},
         {"name": "woodwinds", "instruments": []},
     ]
+
+
+async def test_get_retry_503(postgrest_client: AsyncPostgrestClient) -> None:
+    from supabase_utils.http.headers import Headers
+    from supabase_utils.http.request import Request, Response
+
+    retry_count = 0
+    original_send = postgrest_client.executor.session.send
+
+    async def fake_send(request: Request) -> Response:
+        nonlocal retry_count
+        if retry_count > 0:
+            assert request.headers["X-Retry-Count"] == str(retry_count)
+        if retry_count < 3:
+            retry_count += 1
+            return Response(
+                content=b"error", status=503, headers=Headers.empty(), request=request
+            )
+        return await original_send(request)
+
+    from unittest.mock import patch
+
+    with patch.object(
+        postgrest_client.executor.session, "send", wraps=fake_send
+    ) as _mock_send:
+        query = (
+            postgrest_client.from_("orchestral_sections")
+            .select("name, instruments(name)")
+            .order("name", desc=True, foreign_table="instruments")
+        )
+        res = await query.execute()
+
+        assert res.data == [
+            {"name": "strings", "instruments": [{"name": "violin"}, {"name": "harp"}]},
+            {"name": "woodwinds", "instruments": []},
+        ]
+        assert retry_count > 0
+
+
+async def test_get_retry_503_does_not_retry_when_disabled(
+    postgrest_client: AsyncPostgrestClient,
+) -> None:
+    from supabase_utils.http.headers import Headers
+    from supabase_utils.http.request import Request, Response
+
+    retry_count = 0
+    original_send = postgrest_client.executor.session.send
+
+    async def fake_send(request: Request) -> Response:
+        nonlocal retry_count
+        if retry_count > 0:
+            assert request.headers["X-Retry-Count"] == str(retry_count)
+        if retry_count < 3:
+            retry_count += 1
+            return Response(
+                content=b"error", status=503, headers=Headers.empty(), request=request
+            )
+        return await original_send(request)
+
+    from unittest.mock import patch
+
+    import pytest
+
+    from postgrest.exceptions import APIError
+
+    with patch.object(
+        postgrest_client.executor.session, "send", wraps=fake_send
+    ) as _mock_send:
+        query = (
+            postgrest_client.from_("orchestral_sections")
+            .select("name, instruments(name)")
+            .order("name", desc=True, foreign_table="instruments")
+            .retry(False)
+        )
+        with pytest.raises(APIError):
+            await query.execute()
+
+        assert retry_count == 1
+
+
+async def test_order_retry_400_doesnt_retry(
+    postgrest_client: AsyncPostgrestClient,
+) -> None:
+    from supabase_utils.http.headers import Headers
+    from supabase_utils.http.request import Request, Response
+
+    retry_count = 0
+    original_send = postgrest_client.executor.session.send
+
+    async def fake_send(request: Request) -> Response:
+        nonlocal retry_count
+        if retry_count < 3:
+            retry_count += 1
+            return Response(
+                status=400,
+                content=b'{"message": "JSON could not be generated", "code": "400", "hint": "Refer to full message for details", "details": ""}',
+                headers=Headers.empty(),
+                request=request,
+            )
+        return await original_send(request)
+
+    from unittest.mock import patch
+
+    import pytest
+
+    from postgrest.exceptions import APIError
+
+    with patch.object(
+        postgrest_client.executor.session, "send", wraps=fake_send
+    ) as _mock_send:
+        query = (
+            postgrest_client.from_("orchestral_sections")
+            .select("name, instruments(name)")
+            .order("name", desc=True, foreign_table="instruments")
+        )
+        with pytest.raises(APIError):
+            await query.execute()
+
+        assert retry_count == 1

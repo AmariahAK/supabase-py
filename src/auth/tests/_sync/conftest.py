@@ -8,7 +8,7 @@ from faker import Faker
 from httpx import Client
 from jwt import encode
 from supabase_utils.http.adapters.httpx import HttpxSession
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import Generator, NotRequired, TypedDict
 
 from supabase_auth import SyncSupabaseAuthAdmin, SyncSupabaseAuthClient
 from supabase_auth.types import (
@@ -73,7 +73,7 @@ def mock_app_metadata() -> dict[str, list[str]]:
 
 
 def create_new_user_with_email(
-    service_role_api_client: SyncSupabaseAuthAdmin,
+    secret_key_api_client: SyncSupabaseAuthAdmin,
     *,
     email: str | None = None,
     password: str | None = None,
@@ -84,7 +84,7 @@ def create_new_user_with_email(
             "password": password,
         }
     )
-    response = service_role_api_client.create_user(
+    response = secret_key_api_client.create_user(
         AdminUserAttributes(email=credentials.email, password=credentials.password)
     )
     return response.user
@@ -254,7 +254,19 @@ def auth_admin_api_auto_confirm_disabled_client(
         yield client
 
 
-SERVICE_ROLE_JWT = encode(
+@pytest.fixture
+def admin_client_with_user_and_credentials(
+    secret_key_api_client: SyncSupabaseAuthAdmin,
+) -> Generator[tuple[SyncSupabaseAuthAdmin, User, Credentials]]:
+    credentials = mock_user_credentials()
+    response = secret_key_api_client.create_user(
+        AdminUserAttributes(email=credentials.email, password=credentials.password)
+    )
+    yield (secret_key_api_client, response.user, credentials)
+    secret_key_api_client.delete_user(response.user.id)
+
+
+SECRET_KEY_JWT = encode(
     {
         "role": "service_role",
     },
@@ -263,13 +275,13 @@ SERVICE_ROLE_JWT = encode(
 
 
 @pytest.fixture(params=http_sessions)
-def service_role_api_client(
+def secret_key_api_client(
     request: pytest.FixtureRequest,
 ) -> Iterator[SyncSupabaseAuthAdmin]:
     with SyncSupabaseAuthAdmin(
         url=GOTRUE_URL_SIGNUP_ENABLED_AUTO_CONFIRM_ON,
         default_headers={
-            "Authorization": f"Bearer {SERVICE_ROLE_JWT}",
+            "Authorization": f"Bearer {SECRET_KEY_JWT}",
         },
         http_session=request.param(),
     ) as client:
@@ -277,13 +289,13 @@ def service_role_api_client(
 
 
 @pytest.fixture(params=http_sessions)
-def service_role_api_client_with_sms(
+def secret_key_api_client_with_sms(
     request: pytest.FixtureRequest,
 ) -> Iterator[SyncSupabaseAuthAdmin]:
     with SyncSupabaseAuthAdmin(
         url=GOTRUE_URL_SIGNUP_ENABLED_AUTO_CONFIRM_OFF,
         default_headers={
-            "Authorization": f"Bearer {SERVICE_ROLE_JWT}",
+            "Authorization": f"Bearer {SECRET_KEY_JWT}",
         },
         http_session=request.param(),
     ) as client:
@@ -291,13 +303,13 @@ def service_role_api_client_with_sms(
 
 
 @pytest.fixture(params=http_sessions)
-def service_role_api_client_no_sms(
+def secret_key_api_client_no_sms(
     request: pytest.FixtureRequest,
 ) -> Iterator[SyncSupabaseAuthAdmin]:
     with SyncSupabaseAuthAdmin(
         url=GOTRUE_URL_SIGNUP_DISABLED_AUTO_CONFIRM_OFF,
         default_headers={
-            "Authorization": f"Bearer {SERVICE_ROLE_JWT}",
+            "Authorization": f"Bearer {SECRET_KEY_JWT}",
         },
         http_session=request.param(),
     ) as client:

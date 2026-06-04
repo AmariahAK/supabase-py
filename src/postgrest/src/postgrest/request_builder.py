@@ -40,6 +40,8 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
+MAX_RETRIES = 3
+
 
 class QueryArgs(NamedTuple):
     # groups the method, json, headers and params for a query in a single object
@@ -221,11 +223,15 @@ class SingleAPIResponse:
         return SingleAPIResponse(data=data, count=count)
 
 
+class PostgrestRequest(JSONRequest):
+    retry: bool = True
+
+
 class BaseFilterRequestBuilder:
-    request: JSONRequest
+    request: PostgrestRequest
     negate_next: bool = False
 
-    def __init__(self, request: JSONRequest, negate_next: bool = False) -> None:
+    def __init__(self, request: PostgrestRequest, negate_next: bool = False) -> None:
         self.request = request
         self.negate_next = negate_next
 
@@ -608,10 +614,170 @@ class BaseRequestClient(Generic[HttpIO]):
     executor: HttpIO
     base_url: URL
     default_headers: Headers
-    request: JSONRequest
+    request: PostgrestRequest
+
+
+def can_retry(resp: Response, retry_enabled: bool, attempt_count: int) -> bool:
+    if not retry_enabled or attempt_count >= MAX_RETRIES:
+        return False
+    if not (resp.request.method == "GET" or resp.request.method == "HTTP"):
+        return False
+    return resp.status == 503 or resp.status == 520
+
+
+def send_with_retry(req: PostgrestRequest) -> HttpMethod[Response]:
+    attempt_count = 0
+    while True:
+        if attempt_count > 0:
+            req.headers = req.headers.override("X-Retry-Count", str(attempt_count))
+            req.delay = min(2**attempt_count, 30)
+        resp = yield req
+        if resp.is_success or not can_retry(resp, req.retry, attempt_count):
+            break
+        attempt_count += 1
+    return resp
 
 
 class QueryRequestBuilder(BaseRequestClient[HttpIO]):
+    def select(self, *columns: str) -> QueryRequestBuilder[HttpIO]:
+        _, params, _, _ = pre_select(*columns, count=None)
+        self.request.query = self.request.query.set("select", params["select"])
+        if prefer_headers := self.request.headers.get_list("Prefer"):
+            prefer_headers = [h for h in prefer_headers if not h.startswith("return=")]
+            prefer_headers.append("return=representation")
+            self.request.headers = self.request.headers.override(
+                "Prefer", ",".join(prefer_headers)
+            )
+        else:
+            self.request.headers = self.request.headers.set(
+                "Prefer", "return=representation"
+            )
+        return self
+
+    def retry(self, enabled: bool) -> Self:
+        self.request.retry = enabled
+        return self
+
+    @handle_http_io
+    def execute(self) -> HttpMethod[APIResponse]:
+        """Execute the query.
+
+        .. tip::
+            This is the last method called, after the query is built.
+
+        Returns:
+            :class:`APIResponse`
+
+        Raises:
+            :class:`APIError` If the API raised an error.
+        """
+        r = yield from send_with_retry(self.request)
+        try:
+            if r.is_success:
+                return APIResponse.from_http_request_response(r)
+            else:
+                json_obj = model_validate_json(APIErrorFromJSON, r.content)
+                raise APIError(dict(json_obj))
+        except ValidationError:
+            raise APIError(generate_default_error_message(r))
+
+
+class SingleRequestBuilder(BaseRequestClient[HttpIO]):
+    @handle_http_io
+    def execute(self) -> HttpMethod[SingleAPIResponse]:
+        """Execute the query.
+
+        .. tip::
+            This is the last method called, after the query is built.
+
+        Returns:
+            :class:`SingleAPIResponse`
+
+        Raises:
+            :class:`APIError` If the API raised an error.
+        """
+        response = yield from send_with_retry(self.request)
+        if response.is_success:
+            return SingleAPIResponse.from_http_request_response(response)
+        else:
+            json_obj = model_validate_json(APIErrorFromJSON, response.content)
+            raise APIError(dict(json_obj))
+
+
+class TextRequestBuilder(BaseRequestClient[HttpIO]):
+    @handle_http_io
+    def execute(self) -> HttpMethod[str]:
+        """Execute the query.
+
+                .. tip::
+                    This is the last method called, after the query is built.
+
+                Returns:
+                    :class:`SingleAPIResponse`
+        na
+                Raises:
+                    :class:`APIError` If the API raised an error.
+        """
+        response = yield from send_with_retry(self.request)
+        if response.is_success:
+            return response.content.decode("utf8")
+        else:
+            json_obj = model_validate_json(APIErrorFromJSON, response.content)
+            raise APIError(dict(json_obj))
+
+
+class ExplainRequestBuilder(BaseRequestClient[HttpIO]):
+    @handle_http_io
+    def execute(self) -> HttpMethod[str]:
+        r = yield from send_with_retry(self.request)
+        try:
+            if r.is_success:
+                return r.content.decode("utf-8")
+            else:
+                json_obj = model_validate_json(APIErrorFromJSON, r.content)
+                raise APIError(dict(json_obj))
+        except ValidationError:
+            raise APIError(generate_default_error_message(r))
+
+
+class MaybeSingleRequestBuilder(BaseRequestClient[HttpIO]):
+    @handle_http_io
+    def execute(self) -> HttpMethod[SingleAPIResponse | None]:
+        response = yield from send_with_retry(self.request)
+        if response.is_success:
+            parsed = APIResponse.from_http_request_response(response)
+            if len(parsed.data) == 0:
+                return None
+            if len(parsed.data) == 1:
+                return SingleAPIResponse(data=parsed.data[0], count=parsed.count)
+            else:
+                raise APIError(dict())
+        else:
+            json_obj = model_validate_json(APIErrorFromJSON, response.content)
+            raise APIError(dict(json_obj))
+
+
+class FilterRequestBuilder(QueryRequestBuilder[HttpIO], BaseFilterRequestBuilder):
+    pass
+
+
+class RPCFilterRequestBuilder(BaseRequestClient[HttpIO], BaseRPCRequestBuilder):
+    def single(self) -> SingleRequestBuilder[HttpIO]:
+        """Specify that the query will only return a single row in response.
+
+        .. caution::
+            The API will raise an error if the query returned more than one row.
+        """
+        self.request.headers = self.request.headers.set(
+            "Accept", "application/vnd.pgrst.object+json"
+        )
+        return SingleRequestBuilder(
+            executor=self.executor,
+            base_url=self.base_url,
+            default_headers=self.default_headers,
+            request=self.request,
+        )
+
     @handle_http_io
     def execute(self) -> HttpMethod[APIResponse]:
         """Execute the query.
@@ -634,103 +800,6 @@ class QueryRequestBuilder(BaseRequestClient[HttpIO]):
                 raise APIError(dict(json_obj))
         except ValidationError:
             raise APIError(generate_default_error_message(r))
-
-
-class SingleRequestBuilder(BaseRequestClient[HttpIO]):
-    @handle_http_io
-    def execute(self) -> HttpMethod[SingleAPIResponse]:
-        """Execute the query.
-
-                .. tip::
-                    This is the last method called, after the query is built.
-
-                Returns:
-                    :class:`SingleAPIResponse`
-        na
-                Raises:
-                    :class:`APIError` If the API raised an error.
-        """
-        response = yield self.request
-        if response.is_success:
-            return SingleAPIResponse.from_http_request_response(response)
-        else:
-            json_obj = model_validate_json(APIErrorFromJSON, response.content)
-            raise APIError(dict(json_obj))
-
-
-class TextRequestBuilder(BaseRequestClient[HttpIO]):
-    @handle_http_io
-    def execute(self) -> HttpMethod[str]:
-        """Execute the query.
-
-                .. tip::
-                    This is the last method called, after the query is built.
-
-                Returns:
-                    :class:`SingleAPIResponse`
-        na
-                Raises:
-                    :class:`APIError` If the API raised an error.
-        """
-        response = yield self.request
-        if response.is_success:
-            return response.content.decode("utf8")
-        else:
-            json_obj = model_validate_json(APIErrorFromJSON, response.content)
-            raise APIError(dict(json_obj))
-
-
-class ExplainRequestBuilder(BaseRequestClient[HttpIO]):
-    @handle_http_io
-    def execute(self) -> HttpMethod[str]:
-        r = yield self.request
-        try:
-            if r.is_success:
-                return r.content.decode("utf-8")
-            else:
-                json_obj = model_validate_json(APIErrorFromJSON, r.content)
-                raise APIError(dict(json_obj))
-        except ValidationError:
-            raise APIError(generate_default_error_message(r))
-
-
-class MaybeSingleRequestBuilder(BaseRequestClient[HttpIO]):
-    @handle_http_io
-    def execute(self) -> HttpMethod[SingleAPIResponse | None]:
-        response = yield self.request
-        if response.is_success:
-            parsed = APIResponse.from_http_request_response(response)
-            if len(parsed.data) == 0:
-                return None
-            if len(parsed.data) == 1:
-                return SingleAPIResponse(data=parsed.data[0], count=parsed.count)
-            else:
-                raise APIError(dict())
-        else:
-            json_obj = model_validate_json(APIErrorFromJSON, response.content)
-            raise APIError(dict(json_obj))
-
-
-class FilterRequestBuilder(QueryRequestBuilder[HttpIO], BaseFilterRequestBuilder):
-    pass
-
-
-class RPCFilterRequestBuilder(QueryRequestBuilder[HttpIO], BaseRPCRequestBuilder):
-    def single(self) -> SingleRequestBuilder[HttpIO]:
-        """Specify that the query will only return a single row in response.
-
-        .. caution::
-            The API will raise an error if the query returned more than one row.
-        """
-        self.request.headers = self.request.headers.set(
-            "Accept", "application/vnd.pgrst.object+json"
-        )
-        return SingleRequestBuilder(
-            executor=self.executor,
-            base_url=self.base_url,
-            default_headers=self.default_headers,
-            request=self.request,
-        )
 
 
 class RPCCountRequestBuilder(BaseRequestClient[HttpIO], BaseRPCRequestBuilder):
@@ -903,7 +972,7 @@ class RequestBuilder(Generic[HttpIO]):  #
             :class:`SelectRequestBuilder`
         """
         method, params, headers, json = pre_select(*columns, count=count, head=head)
-        request = JSONRequest(
+        request = PostgrestRequest(
             path=[],
             query=params,
             method=method,
@@ -947,7 +1016,7 @@ class RequestBuilder(Generic[HttpIO]):  #
             default_to_null=default_to_null,
         )
 
-        request = JSONRequest(
+        request = PostgrestRequest(
             path=[],
             query=params,
             method=method,
@@ -994,7 +1063,7 @@ class RequestBuilder(Generic[HttpIO]):  #
             on_conflict=on_conflict,
             default_to_null=default_to_null,
         )
-        request = JSONRequest(
+        request = PostgrestRequest(
             path=[],
             query=params,
             method=method,
@@ -1029,7 +1098,7 @@ class RequestBuilder(Generic[HttpIO]):  #
             count=count,
             returning=returning,
         )
-        request = JSONRequest(
+        request = PostgrestRequest(
             path=[],
             query=params,
             method=method,
@@ -1061,7 +1130,7 @@ class RequestBuilder(Generic[HttpIO]):  #
             count=count,
             returning=returning,
         )
-        request = JSONRequest(
+        request = PostgrestRequest(
             path=[],
             query=params,
             method=method,

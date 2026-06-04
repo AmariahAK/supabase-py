@@ -13,11 +13,12 @@ from supabase_utils.http.io import (
     SyncHttpIO,
 )
 from supabase_utils.http.query import URLQuery
-from supabase_utils.http.request import HTTPRequestMethod, JSONRequest
+from supabase_utils.http.request import HTTPRequestMethod
 from typing_extensions import Self
 from yarl import URL
 
 from .request_builder import (
+    PostgrestRequest,
     RequestBuilder,
     RPCCountRequestBuilder,
     RPCFilterRequestBuilder,
@@ -207,7 +208,7 @@ class PostgrestClient(Generic[HttpIO]):
             if method in ("HEAD", "GET")
             else (params, URLQuery.empty())
         )
-        request = JSONRequest(
+        request = PostgrestRequest(
             path=["rpc", func],
             method=method,
             headers=headers,
