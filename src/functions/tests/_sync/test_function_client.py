@@ -1,3 +1,4 @@
+import re
 from types import TracebackType
 
 import pytest
@@ -8,7 +9,7 @@ from supabase_utils.http.io import SyncHttpIO
 from supabase_utils.http.request import Request, Response
 from yarl import URL
 
-from supabase_functions.client import AsyncFunctionsClient, FunctionsClient
+from supabase_functions.client import FunctionsClient, SyncFunctionsClient
 from supabase_functions.errors import FunctionsHttpError, FunctionsRelayError
 from supabase_functions.utils import FunctionRegion
 from supabase_functions.version import __version__
@@ -45,20 +46,18 @@ def client_returning(
 
 
 def test_init_with_valid_params() -> None:
-    valid_url = "https://supabase.com"
-    client = AsyncFunctionsClient(url=valid_url, headers={})
-    assert str(client.base_url) == valid_url
+    client = SyncFunctionsClient(url="https://supabase.com", headers={})
     assert "X-Client-Info" in client.default_headers
-    assert (
-        client.default_headers["X-Client-Info"]
-        == f"supabase-py/supabase_functions v{__version__}"
+    assert re.match(
+        rf"^supabase-py/supabase_functions v{re.escape(__version__)}; platform=.+; platform-version=.+; runtime=python; runtime-version=\S+$",
+        client.default_headers["X-Client-Info"],
     )
 
 
 @pytest.mark.parametrize("invalid_url", ["not-a-url", "ftp://invalid.com", ""])
 def test_init_with_invalid_url(invalid_url: str) -> None:
     with pytest.raises(Exception, match="url must be a valid HTTP URL string"):
-        AsyncFunctionsClient(url=invalid_url, headers={})
+        SyncFunctionsClient(url=invalid_url, headers={})
 
 
 def test_set_auth_valid_token() -> None:

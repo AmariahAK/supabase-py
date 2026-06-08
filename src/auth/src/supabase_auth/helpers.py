@@ -162,7 +162,7 @@ def handle_error_response(response: Response) -> AuthError:
         )
     if not response.is_error:
         return AuthRetryableError(raw_error.get_error_message(), response.status)
-    if 502 <= response.status <= 504:
+    if response.status in {502, 503, 504, 520, 521, 522, 523, 524, 530}:
         return AuthRetryableError(raw_error.get_error_message(), response.status)
     error_code = None
     response_api_version = parse_response_api_version(response)

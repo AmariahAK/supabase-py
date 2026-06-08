@@ -41,6 +41,9 @@ changelog = "https://github.com/supabase/supabase-py/tree/main/CHANGELOG.md"
 [project.optional-dependencies]
 httpx = ["supabase_utils[httpx]"]
 aiohttp = ["supabase_utils[aiohttp]"]
+iceberg = [
+  "storage3[iceberg] == 3.0.0a1", # x-release-please-version
+]
 
 [dependency-groups]
 dev = [

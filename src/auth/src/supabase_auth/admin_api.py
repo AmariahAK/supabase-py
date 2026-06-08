@@ -44,6 +44,7 @@ from .types import (
     UserList,
     UserResponse,
 )
+from .version import __version__
 
 
 @dataclass
@@ -253,6 +254,8 @@ class SupabaseAuthAdmin(Generic[HttpIO]):
     ) -> None:
         self.executor: HttpIO = executor
         self.base_url: URL = base_url
+        supabase_headers = Headers.supabase_client_headers("supabase_auth", __version__)
+        default_headers = supabase_headers.update(default_headers)
         self.default_headers: Headers = default_headers
 
         self.mfa: SupabaseAuthAdminMFA[HttpIO] = SupabaseAuthAdminMFA(

@@ -81,6 +81,7 @@ from .types import (
     VerifyOtpParams,
     VerifyTokenHashParams,
 )
+from .version import __version__
 
 
 def is_implicit_grant_flow(url: URL) -> bool:
@@ -600,7 +601,9 @@ class AsyncSupabaseAuthClient(SupabaseAuthHttpClient[AsyncHttpIO]):
         flow_type: AuthFlowType = "implicit",
     ) -> None:
         self.base_url = URL(url)
-        default_headers = Headers.from_mapping(headers) if headers else Headers.empty()
+        supabase_headers = Headers.supabase_client_headers("supabase_auth", __version__)
+        user_headers = Headers.from_mapping(headers) if headers else Headers.empty()
+        default_headers = supabase_headers.update(user_headers)
         executor = AsyncHttpIO(session=http_session)
         self.session_manager: AsyncSessionManager = AsyncSessionManager(
             base_url=self.base_url,
@@ -938,7 +941,9 @@ class SyncSupabaseAuthClient(SupabaseAuthHttpClient[SyncHttpIO]):
         flow_type: AuthFlowType = "implicit",
     ) -> None:
         self.base_url = URL(url)
-        default_headers = Headers.from_mapping(headers) if headers else Headers.empty()
+        supabase_headers = Headers.supabase_client_headers("supabase_auth", __version__)
+        user_headers = Headers.from_mapping(headers) if headers else Headers.empty()
+        default_headers = supabase_headers.update(user_headers)
         executor = SyncHttpIO(session=http_session)
         self.session_manager: SyncSessionManager = SyncSessionManager(
             base_url=self.base_url,

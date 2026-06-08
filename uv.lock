@@ -2911,10 +2911,14 @@ source = { editable = "src/storage" }
 dependencies = [
     { name = "deprecation" },
     { name = "pydantic" },
-    { name = "pyiceberg" },
     { name = "supabase-utils" },
     { name = "typing-extensions" },
     { name = "yarl" },
+]
+
+[package.optional-dependencies]
+iceberg = [
+    { name = "pyiceberg" },
 ]
 
 [package.dev-dependencies]
@@ -2947,6 +2951,9 @@ lints = [
     { name = "ruff" },
     { name = "unasync" },
 ]
+mypy = [
+    { name = "pyiceberg" },
+]
 tests = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -2959,11 +2966,12 @@ tests = [
 requires-dist = [
     { name = "deprecation", specifier = ">=2.1.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
-    { name = "pyiceberg", specifier = ">=0.10.0" },
+    { name = "pyiceberg", marker = "extra == 'iceberg'", specifier = ">=0.10.0" },
     { name = "supabase-utils", editable = "src/utils" },
     { name = "typing-extensions", specifier = ">=4.15.0" },
     { name = "yarl", specifier = ">=1.20.1" },
 ]
+provides-extras = ["iceberg"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2993,6 +3001,7 @@ lints = [
     { name = "ruff", specifier = ">=0.12.1" },
     { name = "unasync", specifier = ">=0.6.0" },
 ]
+mypy = [{ name = "pyiceberg", specifier = ">=0.10.0" }]
 tests = [
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
@@ -3043,6 +3052,9 @@ aiohttp = [
 httpx = [
     { name = "supabase-utils", extra = ["httpx"] },
 ]
+iceberg = [
+    { name = "storage3", extra = ["iceberg"] },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -3073,6 +3085,7 @@ requires-dist = [
     { name = "postgrest", editable = "src/postgrest" },
     { name = "realtime", editable = "src/realtime" },
     { name = "storage3", editable = "src/storage" },
+    { name = "storage3", extras = ["iceberg"], marker = "extra == 'iceberg'", editable = "src/storage" },
     { name = "supabase-auth", editable = "src/auth" },
     { name = "supabase-functions", editable = "src/functions" },
     { name = "supabase-utils", editable = "src/utils" },
@@ -3080,7 +3093,7 @@ requires-dist = [
     { name = "supabase-utils", extras = ["httpx"], marker = "extra == 'httpx'", editable = "src/utils" },
     { name = "yarl", specifier = ">=1.22.0" },
 ]
-provides-extras = ["httpx", "aiohttp"]
+provides-extras = ["httpx", "aiohttp", "iceberg"]
 
 [package.metadata.requires-dev]
 dev = [

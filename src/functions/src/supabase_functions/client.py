@@ -1,4 +1,3 @@
-import platform
 from typing import Dict, Generic, Literal, overload
 
 from httpx import AsyncClient, Client
@@ -36,16 +35,11 @@ class FunctionsClient(Generic[HttpIO]):
     def __init__(self, url: URL, headers: Dict[str, str], executor: HttpIO) -> None:
         if not (url.scheme == "http" or url.scheme == "https"):
             raise ValueError("url must be a valid HTTP URL string")
-        self.default_headers = Headers.from_mapping(
-            {
-                "X-Client-Info": f"supabase-py/supabase_functions v{__version__}",
-                "X-Supabase-Client-Platform": platform.system(),
-                "X-Supabase-Client-Platform-Version": platform.release(),
-                "X-Supabase-Client-Runtime": "python",
-                "X-Supabase-Client-Runtime-Version": platform.python_version(),
-                **headers,
-            }
+        supabase_headers = Headers.supabase_client_headers(
+            "supabase_functions", __version__
         )
+        user_headers = Headers.from_mapping(headers)
+        self.default_headers = supabase_headers.update(user_headers)
 
         self.executor: HttpIO = executor
         self.base_url = url

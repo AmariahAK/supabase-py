@@ -1,3 +1,4 @@
+import re
 from types import TracebackType
 
 import pytest
@@ -45,13 +46,11 @@ def client_returning(
 
 
 async def test_init_with_valid_params() -> None:
-    valid_url = "https://supabase.com"
-    client = AsyncFunctionsClient(url=valid_url, headers={})
-    assert str(client.base_url) == valid_url
+    client = AsyncFunctionsClient(url="https://supabase.com", headers={})
     assert "X-Client-Info" in client.default_headers
-    assert (
-        client.default_headers["X-Client-Info"]
-        == f"supabase-py/supabase_functions v{__version__}"
+    assert re.match(
+        rf"^supabase-py/supabase_functions v{re.escape(__version__)}; platform=.+; platform-version=.+; runtime=python; runtime-version=\S+$",
+        client.default_headers["X-Client-Info"],
     )
 
 

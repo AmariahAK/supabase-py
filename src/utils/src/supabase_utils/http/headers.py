@@ -22,6 +22,22 @@ class Headers:
             map = map.set(key.lower(), Vec(val))
         return Headers(pmap=map)
 
+    @staticmethod
+    def supabase_client_headers(package_name: str, package_version: str) -> Headers:
+        from platform import python_version, release, system
+
+        return Headers.from_mapping(
+            {
+                "X-Client-Info": (
+                    f"supabase-py/{package_name} v{package_version}"
+                    f"; platform={system()}"
+                    f"; platform-version={release()}"
+                    f"; runtime=python"
+                    f"; runtime-version={python_version()}"
+                )
+            }
+        )
+
     def set(self, key: str, val: str) -> Headers:
         key = key.lower()
         existing: PVector[str] = self._map.get(key, Vec())

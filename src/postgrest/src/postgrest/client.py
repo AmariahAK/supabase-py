@@ -24,6 +24,7 @@ from .request_builder import (
     RPCFilterRequestBuilder,
 )
 from .types import CountMethod
+from .version import __version__
 
 
 class PostgrestClient(Generic[HttpIO]):
@@ -37,10 +38,13 @@ class PostgrestClient(Generic[HttpIO]):
         *,
         schema: str = "public",
     ) -> None:
+        supabase_headers = Headers.supabase_client_headers("postgrest", __version__)
         self.executor: HttpIO = executor
         self.base_url = base_url
-        self.default_headers = default_headers.set("Accept-Profile", schema).set(
-            "Content-Profile", schema
+        self.default_headers = (
+            supabase_headers.update(default_headers)
+            .set("Accept-Profile", schema)
+            .set("Content-Profile", schema)
         )
 
     def set_auth(
@@ -239,13 +243,12 @@ class AsyncPostgrestClient(PostgrestClient[AsyncHttpIO]):
         headers: dict[str, str] | None = None,
         schema: str = "public",
     ) -> None:
+        user_headers = Headers.from_mapping(headers) if headers else Headers.empty()
         PostgrestClient.__init__(
             self,
             executor=AsyncHttpIO(session=http_session),
             base_url=URL(base_url),
-            default_headers=Headers.from_mapping(headers)
-            if headers
-            else Headers.empty(),
+            default_headers=user_headers,
             schema=schema,
         )
 
@@ -280,13 +283,12 @@ class SyncPostgrestClient(PostgrestClient[SyncHttpIO]):
         *,
         schema: str = "public",
     ) -> None:
+        user_headers = Headers.from_mapping(headers) if headers else Headers.empty()
         PostgrestClient.__init__(
             self,
             executor=SyncHttpIO(session=http_session),
             base_url=URL(base_url),
-            default_headers=Headers.from_mapping(headers)
-            if headers
-            else Headers.empty(),
+            default_headers=user_headers,
             schema=schema,
         )
 

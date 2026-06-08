@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import platform
 import warnings
 from types import TracebackType
 from typing import Generic
@@ -44,21 +43,14 @@ class StorageClient(Generic[HttpIO]):
         executor: HttpIO,
         headers: dict[str, str],
     ) -> None:
-        headers = {
-            "X-Client-Info": f"supabase-py/storage3 v{__version__}",
-            "X-Supabase-Client-Platform": platform.system(),
-            "X-Supabase-Client-Platform-Version": platform.release(),
-            "X-Supabase-Client-Runtime": "python",
-            "X-Supabase-Client-Runtime-Version": platform.python_version(),
-            **headers,
-        }
-
+        supabase_headers = Headers.supabase_client_headers("storage3", __version__)
+        user_headers = Headers.from_mapping(headers)
         self.executor: HttpIO = executor
         if url and url[-1] != "/":
             warnings.warn("Storage endpoint URL should have a trailing slash.")
             url += "/"
         self.base_url = URL(url)
-        self.default_headers = Headers.from_mapping(headers)
+        self.default_headers = supabase_headers.update(user_headers)
 
     def from_(self, id: str) -> StorageFileApiClient[HttpIO]:
         """Run a storage file operation.
