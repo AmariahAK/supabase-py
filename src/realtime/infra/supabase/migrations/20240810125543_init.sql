@@ -14,6 +14,31 @@ CREATE POLICY "Allow authenticated access" ON "public"."todos" AS permissive
         USING (TRUE)
         WITH CHECK (TRUE);
 
+CREATE POLICY "authenticated can receive broadcast" ON "realtime"."messages"
+FOR ALL
+TO AUTHENTICATED
+USING (TRUE);
+
+CREATE FUNCTION public.resend_broadcasts_to_private_test_channel()
+RETURNS trigger
+SECURITY DEFINER
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF (select realtime.topic()) = "test-private-channel" THEN
+    PERFORM realtime.send(
+      jsonb_build_object("test"),
+      "broadcast",
+      "topic:test-private-channel-replay",
+      TRUE
+    );
+  END IF;
+  RETURN NULL;
+END $$; 
+
+CREATE TRIGGER resend_broadcasts_on_test_channel
+AFTER INSERT OR UPDATE ON "realtime"."messages"
+FOR EACH ROW EXECUTE FUNCTION public.resend_broadcasts_to_private_test_channel();
+
 ALTER publication supabase_realtime
     ADD TABLE todos;
 
@@ -26,3 +51,12 @@ create table messages (
 
 -- enable realtime on messages table
 alter publication supabase_realtime add table messages;
+
+-- Grant API access to tables for anon and authenticated roles.
+-- Required since Supabase no longer grants public schema access by default
+-- (see https://github.com/orgs/supabase/discussions/45329).
+GRANT ALL ON TABLE public.todos TO anon, authenticated;
+GRANT ALL ON TABLE public.messages TO anon, authenticated;
+
+-- Grant sequence usage for tables with generated identity primary keys
+GRANT USAGE, SELECT ON SEQUENCE public.messages_id_seq TO anon, authenticated;

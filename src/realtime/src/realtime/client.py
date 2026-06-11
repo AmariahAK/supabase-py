@@ -1,0 +1,280 @@
+import asyncio
+import json
+import logging
+import re
+import sys
+from functools import wraps
+from types import TracebackType
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Union,
+)
+from urllib.parse import urlencode, urlparse, urlunparse
+from warnings import warn
+
+import websockets
+from pydantic import ValidationError
+from websockets.asyncio.client import ClientConnection
+
+from .channel import RealtimeChannel, RealtimeChannelOptions
+from .exceptions import NotConnectedError
+from .message import Message, ReplyMessage, ServerMessage
+from .transformers import http_endpoint_url
+from .types import (
+    DEFAULT_HEARTBEAT_INTERVAL,
+    DEFAULT_TIMEOUT,
+    PHOENIX_CHANNEL,
+    VSN,
+    ChannelEvents,
+    ChannelStates,
+)
+from .utils import is_ws_url
+
+logger = logging.getLogger(__name__)
+
+class connect_once:
+    def __init__(
+        self,
+        url: str,
+        token: str | None = None,
+        params: Dict[str, Any] | None = None,
+    ) -> None:
+        if not is_ws_url(url):
+            raise ValueError("url must be a valid WebSocket URL or HTTP URL string")
+        self.url = f"{re.sub(r'https://', 'wss://', re.sub(r'http://', 'ws://', url, flags=re.IGNORECASE), flags=re.IGNORECASE)}/websocket"
+        self.token = token
+        if token:
+            self.url += f"?apikey={token}"
+        self.listen_task: asyncio.Task | None = None
+        self.heartbeat_task: asyncio.Task | None = None
+
+    def __await__(self) -> Generator[None, None, "RealtimeClient"]:
+        return self.__await_impl__().__await__()
+
+    async def __await_impl__(self) -> "RealtimeClient":
+        self.ws = await websockets.connect(self.url)
+        self.client = RealtimeClient(self.url, self.ws, self.token)
+        self.listen_task = asyncio.create_task(self.client.listen())
+        self.heartbeat_task = asyncio.create_task(self.client.heartbeat())
+        return self.client
+
+    async def __aenter__(self) -> "RealtimeClient":
+        return await self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        assert self.listen_task, "Should never exit without listen_task"
+        self.listen_task.cancel()
+        assert self.heartbeat_task, "Should never exit without hearbeat_task"
+        self.heartbeat_task.cancel()
+        await self.client.close()
+
+class MaxRetriesExceeded(Exception):
+    pass
+
+async def automatically_reconnect(url: str, token: str, client_handler: Callable[["RealtimeClient"], Awaitable[None]], max_retries: int=3) -> None:
+    while True:
+        retries = 0
+        try:
+            client = await connect_once(url, token)
+            retries = 0
+            await client_handler(client)
+            break
+        except websockets.ConnectionClosedError:
+            continue
+        except TimeoutError:
+            retries += 1
+            if retries > max_retries:
+                raise MaxRetriesExceeded()
+
+class RealtimeClient:
+    def __init__(
+        self,
+        url: str,
+        ws_connection: ClientConnection,
+        token: str | None = None,
+        hb_interval: int = DEFAULT_HEARTBEAT_INTERVAL,
+        ack: bool = True,
+    ) -> None:
+        self.ack = ack
+        self.url = url
+        self.access_token = token
+        self.http_endpoint = http_endpoint_url(url)
+        self.hb_interval = hb_interval
+        self._ws_connection: ClientConnection = ws_connection
+        self.ref = 0
+        self.channels: Dict[str, RealtimeChannel] = {}
+        self.message_refs: Dict[str, asyncio.Future[Message]] = {}
+        self._connection_failure: asyncio.Future[Message] = asyncio.Future()
+
+    @property
+    def is_connected(self) -> bool:
+        return self._ws_connection is not None
+
+    async def listen(self) -> None:
+        """
+        An infinite loop that keeps listening.
+        :return: None
+        """
+        try:
+            async for msg in self._ws_connection:
+                try:
+                    message = Message.model_validate_json(msg)
+                except ValidationError as e:
+                    logger.error(f"Unrecognized message format {msg!r}\n{e}")
+                    continue
+                if (ref := message.ref) and self.ack:
+                    self.message_refs[ref].set_result(message)
+                elif channel := self.channels.get(message.topic):
+                    asyncio.create_task(channel.message_stream.put(message))
+                else:
+                    logger.info(f"Ignoring message: {message!r}")
+        except Exception as exc:
+            self._connection_failure.set_exception(exc)
+
+    async def close(self) -> None:
+        """
+        Close the WebSocket connection.
+
+        Returns:
+            None
+
+        Raises:
+            NotConnectedError: If the connection is not established when this method is called.
+        """
+
+        await self._ws_connection.close()
+
+    async def get_message_or_raise(self, fut: asyncio.Future[Message]) -> Message:
+        done, pending = await asyncio.wait(
+            (fut, self._connection_failure),
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        if self._connection_failure in done:
+            fut.cancel()
+            await self._connection_failure
+        return fut.result()
+
+    async def heartbeat(self) -> None:
+        try:
+            while True:
+                data = Message(
+                    topic=PHOENIX_CHANNEL,
+                    event=ChannelEvents.heartbeat,
+                    payload={},
+                    ref=self._make_ref(),
+                )
+                logger.info("sending heartbeat")
+                res = await self.send(data)
+                logger.info(f"heartbeat response: {res!r}")
+                await asyncio.sleep(max(self.hb_interval, 15))
+        except websockets.ConnectionClosed as exc:
+            self._connection_failure.set_exception(exc)
+
+    def channel(
+        self, topic: str, params: RealtimeChannelOptions | None = None
+    ) -> RealtimeChannel:
+        """
+        Initialize a channel and create a two-way association with the socket.
+
+        :param topic: The topic to subscribe to
+        :param params: Optional channel parameters
+        :return: AsyncRealtimeChannel instance
+        """
+        topic = f"realtime:{topic}"
+        chan = RealtimeChannel(self, topic, params)
+        self.channels[topic] = chan
+        return chan
+
+    def get_channels(self) -> List[RealtimeChannel]:
+        return list(self.channels.values())
+
+    def _remove_channel(self, channel: RealtimeChannel) -> None:
+        del self.channels[channel.topic]
+
+    async def remove_channel(self, channel: RealtimeChannel) -> None:
+        if chan := self.channels.get(channel.topic):
+            await chan.unsubscribe()
+            self._remove_channel(channel)
+
+    async def remove_all_channels(self) -> None:
+        """
+        Unsubscribes and removes all channels from the socket
+        :return: None
+        """
+        tasks = []
+        for channel in self.channels.values():
+            tasks.append(asyncio.create_task(channel.unsubscribe()))
+        await asyncio.wait(tasks)
+
+    async def set_auth(self, token: str | None) -> None:
+        """
+        Set the authentication token for the connection and update all joined channels.
+
+        This method updates the access token for the current connection and sends the new token
+        to all joined channels. This is useful for refreshing authentication or changing users.
+
+        Args:
+            token (Optional[str]): The new authentication token. Can be None to remove authentication.
+
+        Returns:
+            None
+        """
+        self.access_token = token
+        tasks = []
+        for channel in self.channels.values():
+            if channel.joined and channel.state == ChannelStates.JOINED:
+                task = asyncio.create_task(channel.send_event(ChannelEvents.access_token, {"access_token": token}))
+                tasks.append(task)
+        if tasks:
+            await asyncio.wait(tasks)
+
+    def _make_ref(self) -> str:
+        self.ref += 1
+        return f"{self.ref}"
+
+    async def send(self, message: Message) -> ReplyMessage:
+        assert message.ref, "Cannot wait for reponse on a message without ref"
+        
+        message_str = message.model_dump_json()
+        logger.debug(f"sending: {message_str}")
+
+        receive: asyncio.Future[Message] = asyncio.Future()
+        self.message_refs[message.ref] = receive
+        await self._ws_connection.send(message_str)
+        logger.debug(f"waiting for ref='{message.ref}'")
+        
+        response = await self.get_message_or_raise(receive)
+        del self.message_refs[message.ref]
+        
+        return ReplyMessage.model_validate(response)
+
+    async def send_no_wait(self, message: Message) -> None:
+        message_str = message.model_dump_json()
+        logger.debug(f"sending: {message_str}")
+        await self._ws_connection.send(message_str)
+
+    def endpoint_url(self) -> str:
+        parsed_url = urlparse(self.url)
+        query = urlencode({"vsn": VSN}, doseq=True)
+        return urlunparse(
+            (
+                parsed_url.scheme,
+                parsed_url.netloc,
+                parsed_url.path,
+                parsed_url.params,
+                query,
+                parsed_url.fragment,
+            )
+        )

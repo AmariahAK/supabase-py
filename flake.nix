@@ -53,6 +53,13 @@
           })
         ];
       });
+      urwid-readline = prev.urwid-readline.overrideAttrs (old: {
+        nativeBuildInputs = old.nativeBuildInputs ++ [
+          (final.resolveBuildSystem {
+            setuptools = [];
+          })
+        ];
+      });
       pyiceberg = prev.pyiceberg.overrideAttrs (old: {
         buildInputs = (old.buildInputs or []) ++ [ final.poetry-core ];
       });
