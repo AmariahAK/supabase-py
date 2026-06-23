@@ -20,6 +20,8 @@ async def get_client(request: Request) -> AsyncClient:
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
     token = auth.removeprefix("Bearer ")
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     # Mutate after construction to preserve DEFAULT_HEADERS (X-Client-Info etc.)
     options = AsyncClientOptions()
     options.headers["Authorization"] = f"Bearer {token}"

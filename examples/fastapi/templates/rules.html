@@ -19,19 +19,47 @@
 
   const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
+  function renderRules(rules) {
+    const container = document.getElementById('rules-list');
+    container.innerHTML = '';
+    if (rules.length === 0) {
+        container.innerHTML = '<p style="color:#9ca3af">No rules yet.</p>';
+        return;
+    }
+    for (const r of rules) {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const strong = document.createElement('strong');
+        strong.textContent = r.label;
+
+        const br = document.createElement('br');
+
+        const small = document.createElement('small');
+        const watchCol = document.createElement('code');
+        watchCol.textContent = r.watch_column;
+        const watchVal = document.createElement('code');
+        watchVal.textContent = r.watch_value;
+        const channel = document.createElement('code');
+        channel.textContent = '#' + r.broadcast_channel;
+        small.append('when ', watchCol, ' = ', watchVal, ' → broadcast on ', channel);
+
+        const btn = document.createElement('button');
+        btn.className = 'danger';
+        btn.style.float = 'right';
+        btn.textContent = 'Delete';
+        btn.addEventListener('click', () => deleteRule(r.id));
+
+        card.append(strong, br, small, btn);
+        container.appendChild(card);
+    }
+  }
+
   async function loadRules() {
     const resp = await fetch('/rules/', { headers: authHeaders });
     if (resp.status === 401) { window.location.href = '/signin'; return; }
     const rules = await resp.json();
-    document.getElementById('rules-list').innerHTML = rules.length === 0
-      ? '<p style="color:#9ca3af">No rules yet.</p>'
-      : rules.map(r => `
-        <div class="card">
-          <strong>${r.label}</strong><br>
-          <small>when <code>${r.watch_column}</code> = <code>${r.watch_value}</code>
-          → broadcast on <code>#${r.broadcast_channel}</code></small>
-          <button class="danger" style="float:right" onclick="deleteRule('${r.id}')">Delete</button>
-        </div>`).join('');
+    renderRules(rules);
   }
 
   async function deleteRule(id) {

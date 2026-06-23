@@ -66,7 +66,14 @@
           const feed = document.getElementById('events-feed');
           const card = document.createElement('div');
           card.className = 'card';
-          card.innerHTML = `<strong>${payload.rule.label}</strong> — task <em>${payload.task.title}</em> → ${payload.task.status} <small style="color:#9ca3af">${new Date().toLocaleTimeString()}</small>`;
+          const strong = document.createElement('strong');
+          strong.textContent = payload.rule.label;
+          const em = document.createElement('em');
+          em.textContent = payload.task.title;
+          const small = document.createElement('small');
+          small.style.color = '#9ca3af';
+          small.textContent = new Date().toLocaleTimeString();
+          card.append(strong, document.createTextNode(' — task '), em, document.createTextNode(` → ${payload.task.status} `), small);
           feed.prepend(card);
         })
         .subscribe();

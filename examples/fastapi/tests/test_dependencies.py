@@ -34,6 +34,15 @@ async def test_get_client_raises_401_when_not_bearer():
 
 
 @pytest.mark.asyncio
+async def test_get_client_raises_401_for_bearer_with_no_token():
+    from dependencies import get_client
+    request = _make_request("Bearer ")
+    with pytest.raises(HTTPException) as exc_info:
+        await get_client(request)
+    assert exc_info.value.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_get_client_returns_client_with_jwt():
     mock_client = AsyncMock()
     with patch("dependencies.acreate_client", AsyncMock(return_value=mock_client)):

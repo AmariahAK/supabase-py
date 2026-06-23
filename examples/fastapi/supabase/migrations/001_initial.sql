@@ -44,7 +44,9 @@ CREATE POLICY "tasks_insert" ON tasks
     FOR INSERT TO authenticated WITH CHECK (true);
 
 CREATE POLICY "tasks_update" ON tasks
-    FOR UPDATE TO authenticated USING (assigned_to = auth.uid());
+    FOR UPDATE TO authenticated
+    USING (assigned_to = auth.uid())
+    WITH CHECK (assigned_to = auth.uid());
 
 -- rules: users own their rules
 CREATE POLICY "rules_select" ON rules

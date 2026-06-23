@@ -48,5 +48,13 @@ async def signin(body: AuthRequest):
 
 @router.post("/signout")
 async def signout():
-    # Browser signs out via JS client directly; this endpoint exists for CLI/programmatic use.
+    # Browser should call _supabase.auth.signOut() to clear the local session.
+    # This endpoint calls sign_out() server-side for programmatic/CLI clients,
+    # but note: supabase-py auth sign_out() only revokes the refresh token;
+    # the access JWT remains valid until its natural expiry (~1 hour by default).
+    client = await acreate_client(settings.supabase_url, settings.supabase_anon_key)
+    try:
+        await client.auth.sign_out()
+    except Exception:
+        pass  # best-effort; client may already be signed out
     return {"status": "ok"}

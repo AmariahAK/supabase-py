@@ -75,6 +75,22 @@ async def test_matching_rule_inserts_event_and_broadcasts():
 
 
 @pytest.mark.asyncio
+async def test_rule_with_non_status_column_fires():
+    """Rules watching columns other than 'status' should also fire."""
+    client, broadcast_channel = _make_service_client(rules_data=[
+        {"id": "r2", "watch_column": "title", "watch_value": "urgent",
+         "broadcast_channel": "alerts", "label": "Urgent title alert"}
+    ])
+
+    from engine import on_task_change
+
+    payload = {"new": {"id": "task-2", "title": "urgent", "status": "pending"}, "old": {}}
+    await on_task_change(client, payload)
+
+    broadcast_channel.send.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_empty_new_record_is_ignored():
     """Payloads without a 'new' record (e.g. DELETE) are silently ignored."""
     client, broadcast_channel = _make_service_client(rules_data=[

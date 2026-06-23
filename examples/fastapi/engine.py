@@ -20,10 +20,7 @@ async def on_task_change(service_client: AsyncClient, payload: dict) -> None:
     rules_response = await service_client.table("rules").select("*").execute()
 
     for rule in rules_response.data:
-        if (
-            rule["watch_column"] == "status"
-            and rule["watch_value"] == new_record.get("status")
-        ):
+        if new_record.get(rule["watch_column"]) == rule["watch_value"]:
             await service_client.table("rule_events").insert({
                 "rule_id": rule["id"],
                 "task_id": new_record["id"],
@@ -50,7 +47,7 @@ async def start_engine(service_client: AsyncClient) -> None:
     channel = service_client.channel("tasks-watcher")
 
     # FRICTION: on_postgres_changes may only accept a sync callable.
-    # If async callbacks are not supported, we wrap with asyncio.get_event_loop().
+    # If async callbacks are not supported, we wrap with asyncio.get_running_loop().
     # Document the actual behavior in friction_log.md.
     def _sync_wrapper(payload: dict) -> None:
         asyncio.get_running_loop().create_task(on_task_change(service_client, payload))
