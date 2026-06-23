@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Rules{% endblock %}
+{% block content %}
+<h1>Watch Rules</h1>
+<p>Rules run in the Python backend. When a task field matches, an event is broadcast to the configured channel.</p>
+<form id="create-rule-form">
+  <input id="rule-label" placeholder="Label (e.g. Alert on done)" required>
+  <input id="watch-column" value="status" placeholder="Column" required>
+  <input id="watch-value" placeholder="Value (e.g. done)" required>
+  <input id="broadcast-channel" placeholder="Channel (e.g. team-alerts)" required>
+  <button type="submit">+ Add Rule</button>
+</form>
+<div id="rules-list"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const token = localStorage.getItem('access_token');
+  if (!token) window.location.href = '/signin';
+
+  const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  async function loadRules() {
+    const resp = await fetch('/rules/', { headers: authHeaders });
+    if (resp.status === 401) { window.location.href = '/signin'; return; }
+    const rules = await resp.json();
+    document.getElementById('rules-list').innerHTML = rules.length === 0
+      ? '<p style="color:#9ca3af">No rules yet.</p>'
+      : rules.map(r => `
+        <div class="card">
+          <strong>${r.label}</strong><br>
+          <small>when <code>${r.watch_column}</code> = <code>${r.watch_value}</code>
+          → broadcast on <code>#${r.broadcast_channel}</code></small>
+          <button class="danger" style="float:right" onclick="deleteRule('${r.id}')">Delete</button>
+        </div>`).join('');
+  }
+
+  async function deleteRule(id) {
+    await fetch(`/rules/${id}`, { method: 'DELETE', headers: authHeaders });
+    loadRules();
+  }
+
+  document.getElementById('create-rule-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await fetch('/rules/', {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        label: document.getElementById('rule-label').value,
+        watch_column: document.getElementById('watch-column').value,
+        watch_value: document.getElementById('watch-value').value,
+        broadcast_channel: document.getElementById('broadcast-channel').value,
+      })
+    });
+    document.getElementById('create-rule-form').reset();
+    document.getElementById('watch-column').value = 'status';
+    loadRules();
+  });
+
+  loadRules();
+</script>
+{% endblock %}
