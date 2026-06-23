@@ -45,6 +45,9 @@ app.include_router(auth_router.router)
 from routers import tasks as tasks_router  # noqa: E402
 app.include_router(tasks_router.router)
 
+from routers import rules as rules_router  # noqa: E402
+app.include_router(rules_router.router)
+
 
 @app.get("/health")
 async def health():
