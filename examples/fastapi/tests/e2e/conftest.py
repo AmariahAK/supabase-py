@@ -62,12 +62,15 @@ def running_app():
         stderr=subprocess.PIPE,
     )
 
-    deadline = time.time() + 45
+    deadline = time.time() + 60
     started = False
     while time.time() < deadline:
+        # Fail fast if the process exited unexpectedly.
+        if proc.poll() is not None:
+            break
         try:
-            r = httpx.get(f"{APP_BASE_URL}/", timeout=2)
-            if r.status_code < 500:
+            r = httpx.get(f"{APP_BASE_URL}/health", timeout=2)
+            if r.status_code == 200:
                 started = True
                 break
         except Exception:
@@ -75,12 +78,20 @@ def running_app():
         time.sleep(0.4)
 
     if not started:
-        stderr_out = ""
-        if proc.stderr:
-            proc.stderr.read(8192)
         proc.terminate()
+        stderr_out = "(unavailable)"
+        try:
+            proc.wait(timeout=5)
+            if proc.stderr:
+                stderr_out = proc.stderr.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
         pytest.fail(
-            f"FastAPI app did not start within 45s on port {APP_PORT}. stderr:\n{stderr_out}"
+            f"FastAPI app did not start on port {APP_PORT} "
+            f"(exit code: {proc.returncode}).\n"
+            f"Ensure SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_ANON_KEY are set "
+            f"and `supabase start` is running in examples/fastapi/.\n"
+            f"stderr:\n{stderr_out}"
         )
 
     yield APP_BASE_URL
