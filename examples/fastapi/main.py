@@ -42,6 +42,9 @@ templates = Jinja2Templates(directory="templates")
 from routers import auth as auth_router  # noqa: E402
 app.include_router(auth_router.router)
 
+from routers import tasks as tasks_router  # noqa: E402
+app.include_router(tasks_router.router)
+
 
 @app.get("/health")
 async def health():
