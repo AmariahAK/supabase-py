@@ -39,6 +39,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Realtime Rule Engine", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 
+from routers import auth as auth_router  # noqa: E402
+app.include_router(auth_router.router)
+
 
 @app.get("/health")
 async def health():
