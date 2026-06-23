@@ -1,6 +1,6 @@
 # examples/fastapi/tests/test_engine.py
 import pytest
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 
 def _make_service_client(rules_data=None, events_insert_data=None):

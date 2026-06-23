@@ -53,7 +53,7 @@ async def start_engine(service_client: AsyncClient) -> None:
     # If async callbacks are not supported, we wrap with asyncio.get_event_loop().
     # Document the actual behavior in friction_log.md.
     def _sync_wrapper(payload: dict) -> None:
-        asyncio.get_event_loop().create_task(on_task_change(service_client, payload))
+        asyncio.get_running_loop().create_task(on_task_change(service_client, payload))
 
     channel.on_postgres_changes(
         event="UPDATE",
