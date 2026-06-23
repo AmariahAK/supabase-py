@@ -67,3 +67,13 @@ CREATE POLICY "rule_events_select" ON rule_events
 
 -- Enable Realtime for tasks so the Python engine receives Postgres Changes
 ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
+
+-- Grant table-level privileges so PostgREST can execute queries.
+-- Supabase's default privileges are set for supabase_admin; migrations run as
+-- postgres so tables need explicit grants.  RLS policies still control row access.
+GRANT SELECT, INSERT, UPDATE ON TABLE tasks       TO authenticated;
+GRANT SELECT, INSERT, DELETE ON TABLE rules       TO authenticated;
+GRANT SELECT               ON TABLE rule_events   TO authenticated;
+
+-- service_role bypasses RLS and is used by the realtime engine.
+GRANT ALL ON TABLE tasks, rules, rule_events      TO service_role;

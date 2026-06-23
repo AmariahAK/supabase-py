@@ -34,6 +34,43 @@ def _random_suffix(n: int = 8) -> str:
     return "".join(random.choices(string.ascii_lowercase, k=n))
 
 
+async def _delete_user_and_data(user_id: str) -> None:
+    """
+    Delete a test user and all their FK-referenced rows.
+
+    GoTrue's admin.delete_user() deletes from auth.users but cannot cascade to
+    application tables that REFERENCE auth.users without ON DELETE CASCADE.
+    We must delete the application rows first, then the user.
+    """
+    admin_client = await acreate_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    try:
+        # rules cascade to rule_events via ON DELETE CASCADE in the FK.
+        await admin_client.table("rules").delete().eq("user_id", user_id).execute()
+        # tasks may reference the user in both assigned_to and created_by.
+        await admin_client.table("tasks").delete().eq("created_by", user_id).execute()
+        await admin_client.table("tasks").delete().eq("assigned_to", user_id).execute()
+        await admin_client.auth.admin.delete_user(user_id)
+    finally:
+        await admin_client.realtime.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _wipe_tables():
+    """Delete all rows from test tables at session start for a clean slate."""
+    headers = {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "Prefer": "return=minimal",
+    }
+    for table in ("rule_events", "rules", "tasks"):
+        httpx.delete(
+            f"{SUPABASE_URL}/rest/v1/{table}",
+            headers=headers,
+            params={"id": "not.is.null"},
+            timeout=10,
+        )
+
+
 @pytest.fixture(scope="session")
 def running_app():
     """Start the FastAPI app (including engine) as a uvicorn subprocess."""
@@ -112,11 +149,16 @@ async def service_client():
 
 
 @pytest.fixture
-async def user_a(service_client):
+async def user_a():
     """Create a real Supabase user and return credentials. Cleaned up after the test."""
     email = f"e2e_a_{_random_suffix()}@example.com"
     password = "Password123!"
-    resp = await service_client.auth.sign_up({"email": email, "password": password})
+
+    # Use a dedicated anon client for sign_up to avoid corrupting a shared
+    # service-role client's internal auth state.
+    signup_client = await acreate_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    resp = await signup_client.auth.sign_up({"email": email, "password": password})
+    await signup_client.realtime.close()
     assert resp.session, f"sign_up returned no session for {email}"
     token = resp.session.access_token
     user_id = resp.user.id
@@ -127,15 +169,19 @@ async def user_a(service_client):
 
     yield {"token": token, "user_id": user_id, "email": email, "client": anon_client}
 
-    await service_client.auth.admin.delete_user(user_id)
+    await anon_client.realtime.close()
+    await _delete_user_and_data(user_id)
 
 
 @pytest.fixture
-async def user_b(service_client):
+async def user_b():
     """A second user for RLS isolation tests. Cleaned up after the test."""
     email = f"e2e_b_{_random_suffix()}@example.com"
     password = "Password123!"
-    resp = await service_client.auth.sign_up({"email": email, "password": password})
+
+    signup_client = await acreate_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    resp = await signup_client.auth.sign_up({"email": email, "password": password})
+    await signup_client.realtime.close()
     assert resp.session, f"sign_up returned no session for {email}"
     token = resp.session.access_token
     user_id = resp.user.id
@@ -146,7 +192,8 @@ async def user_b(service_client):
 
     yield {"token": token, "user_id": user_id, "email": email, "client": anon_client}
 
-    await service_client.auth.admin.delete_user(user_id)
+    await anon_client.realtime.close()
+    await _delete_user_and_data(user_id)
 
 
 @pytest.fixture

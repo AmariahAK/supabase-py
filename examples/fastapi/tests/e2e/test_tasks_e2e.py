@@ -9,10 +9,11 @@ RLS policy summary (from 001_initial.sql):
 import pytest
 
 
-async def test_list_tasks_returns_empty_for_new_user(client_a):
+async def test_list_tasks_returns_200_for_authenticated_user(client_a):
+    """Authenticated user can list tasks (RLS SELECT policy: all users see all tasks)."""
     r = await client_a.get("/tasks/")
     assert r.status_code == 200
-    assert r.json() == []
+    assert isinstance(r.json(), list)
 
 
 async def test_create_task(client_a, user_a):

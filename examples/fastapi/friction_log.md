@@ -76,6 +76,41 @@ idiomatic.
 
 ---
 
+## Realtime payload key mismatch vs JS SDK
+
+**Severity:** high
+**Where:** `engine.py:on_task_change` / `payload` argument from `on_postgres_changes`
+**What happened:** The JS Supabase client normalizes the Realtime payload to
+`payload.new` and `payload.old` for the changed records. `supabase-py` does NOT
+perform this normalization — the raw server format is used instead, where the new
+record is at `payload["data"]["record"]` and the old record is at
+`payload["data"]["old_record"]`. Code ported from JS examples that uses
+`payload["new"]` silently gets an empty dict (no KeyError) and returns early,
+producing zero rule events with no error logged.
+**Recommendation:** Normalize the Realtime Postgres Changes payload to match the
+JS SDK shape (`payload["new"]`, `payload["old"]`) so that documentation examples
+and cross-SDK code work without modification. Alternatively, document the difference
+prominently in the API reference.
+
+---
+
+## `auth.sign_up()` on a service-role client corrupts its auth state
+
+**Severity:** high
+**Where:** `tests/e2e/conftest.py` / any code that calls `auth.sign_up()` or `auth.sign_in()`
+**What happened:** Calling `client.auth.sign_up(...)` on a `service_role` client
+stores the new user's session in the client's internal auth state, overwriting the
+service role key. Subsequent requests from that client use the user's JWT instead
+of the service key, causing `auth.admin.*` calls to return 403 "User not allowed".
+This is a silent mutation with no warning — the client appears functional until a
+privileged operation fails.
+**Recommendation:** Document that service-role clients must not be used for
+sign-up or sign-in operations. Raise a warning (or error) if `auth.sign_up()` is
+called on a client initialized with a service-role key. Alternatively, store the
+admin key separately from the session so it cannot be overwritten.
+
+---
+
 ## Service role vs anon key have no type-level distinction
 
 **Severity:** medium

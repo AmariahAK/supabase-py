@@ -8,12 +8,17 @@ async def on_task_change(service_client: AsyncClient, payload: dict) -> None:
     """
     Called by the Realtime subscription for each UPDATE on the tasks table.
 
-    FRICTION NOTE: The supabase-py Realtime callback is synchronous by design
+    FRICTION NOTE (1): The supabase-py Realtime callback is synchronous by design
     in some versions — if channel.on_postgres_changes() does not accept an
     async callback, wrap this function with asyncio.create_task() inside a
     sync wrapper. See friction_log.md — "Realtime callback async support".
+
+    FRICTION NOTE (2): supabase-py does NOT normalize the Realtime payload to
+    `payload["new"]` / `payload["old"]` like the JS SDK does.  The actual keys
+    are `payload["data"]["record"]` (new) and `payload["data"]["old_record"]`
+    (old).  See friction_log.md — "Realtime payload key mismatch vs JS SDK".
     """
-    new_record = payload.get("new", {})
+    new_record = payload.get("data", {}).get("record", {})
     if not new_record or not new_record.get("id"):
         return
 
