@@ -57,3 +57,32 @@ odd (subscribing implies receiving, but we only want to send).
 **Recommendation:** Add a `channel.broadcast(event, payload)` method that
 connects and sends without requiring a full subscription lifecycle, matching the
 common server-side fire-and-forget pattern.
+
+---
+
+## Per-request AsyncClient construction is expensive and unguided
+
+**Severity:** high
+**Where:** `dependencies.py:get_client`
+**What happened:** Every HTTP request constructs a new `AsyncClient` via
+`acreate_client()`, which initialises an httpx `AsyncClient`, a new auth client,
+lazy postgrest/storage/functions clients, and wires up the `_listen_to_auth_events`
+callback. There is no supported pattern for sharing an httpx session across
+requests while varying the Authorization header.
+**Recommendation:** Provide a `AsyncClient.with_token(jwt: str) -> AsyncClient`
+method that returns a lightweight copy sharing the underlying httpx session but
+with a different auth header — making per-request JWT injection cheap and
+idiomatic.
+
+---
+
+## Service role vs anon key have no type-level distinction
+
+**Severity:** medium
+**Where:** `main.py` / `engine.py` / any file that creates a client
+**What happened:** Both the service role client and the per-request anon client
+are `AsyncClient` instances. It is easy to pass the wrong one to a function,
+accidentally bypassing RLS or exposing the service key to user-controlled inputs.
+**Recommendation:** Introduce `ServiceRoleClient` and `AnonClient` subclasses (or
+typed wrappers) so that type checkers can catch misuse, and document clearly which
+methods require which client type.
