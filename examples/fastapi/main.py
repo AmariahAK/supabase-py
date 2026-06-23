@@ -8,16 +8,7 @@ from supabase import acreate_client
 from config import settings
 
 
-async def _noop_engine(client):
-    """Replaced at startup once engine.py exists."""
-    await asyncio.Event().wait()
-
-
-# Import engine lazily so scaffold passes tests before engine.py exists.
-try:
-    from engine import start_engine
-except ImportError:
-    start_engine = _noop_engine
+from engine import start_engine
 
 
 @asynccontextmanager
