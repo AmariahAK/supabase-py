@@ -15,17 +15,15 @@ This exercises the full supabase-py Realtime path from Python:
 """
 
 import asyncio
-
-import pytest
-
+from typing import Optional
 
 _POLL_INTERVAL = 0.5
-_TIMEOUT = 15
+_TIMEOUT = 30
 
 
 async def _wait_for_rule_event(
     service_client, rule_id: str, task_id: str, timeout: float = _TIMEOUT
-) -> dict | None:
+) -> Optional[dict]:
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         result = (

@@ -1,11 +1,12 @@
-import pytest
+from typing import Optional
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
-from starlette.datastructures import Headers
 
 
-def _make_request(auth_header: str | None) -> Request:
+def _make_request(auth_header: Optional[str]) -> Request:
     scope = {
         "type": "http",
         "method": "GET",
