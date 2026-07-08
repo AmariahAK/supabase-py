@@ -68,11 +68,13 @@ def _transform_state(
             new_state[key].append(new_presence)
     return new_state
 
+
 @dataclass
 class PresenceJoin:
     key: str
     current_presences: List[Presence]
     new_presences: List[Presence]
+
 
 @dataclass
 class PresenceLeave:
@@ -80,17 +82,23 @@ class PresenceLeave:
     current_presences: List[Presence]
     left_presences: List[Presence]
 
+
 PresenceEvent = PresenceJoin | PresenceLeave
+
 
 class RealtimePresence:
     def __init__(self) -> None:
         self.state: RealtimePresenceState = {}
 
-    def _on_state_event(self, payload: RawPresenceState) -> Generator[PresenceEvent, None, None]:
+    def _on_state_event(
+        self, payload: RawPresenceState
+    ) -> Generator[PresenceEvent, None, None]:
         state = _transform_state(payload)
         self.state = yield from self._sync_state(state)
 
-    def _on_diff_event(self, payload: RawPresenceDiff) -> Generator[PresenceEvent, None, None]:
+    def _on_diff_event(
+        self, payload: RawPresenceDiff
+    ) -> Generator[PresenceEvent, None, None]:
         joins = _transform_state(payload["joins"])
         leaves = _transform_state(payload["leaves"])
         self.state = yield from self._sync_diff(joins, leaves)

@@ -58,7 +58,7 @@ class ErrorReplyMessage(BaseModel):
 
 class ReplyMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.reply]
     topic: str
     payload: SuccessReplyMessage | ErrorReplyMessage
@@ -81,7 +81,7 @@ class ErrorSystemPayload(BaseModel):
 
 class SystemMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.system]
     topic: str
     payload: SuccessSystemPayload | ErrorSystemPayload
@@ -112,7 +112,7 @@ class AccessTokenMessage(BaseModel):
 
 class PostgresChangesMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.postgres_changes]
     topic: str
     payload: PostgresChangesPayload
@@ -121,14 +121,14 @@ class PostgresChangesMessage(BaseModel):
 
 class BroadcastMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.broadcast]
     topic: str
     payload: BroadcastPayload
     ref: Literal[None]
 
 
-class PresenceMessage(BaseModel):    
+class PresenceMessage(BaseModel):
     event: Literal[ChannelEvents.presence]
     topic: str
     payload: dict[str, JSON]
@@ -137,7 +137,7 @@ class PresenceMessage(BaseModel):
 
 class PresenceStateMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.presence_state]
     topic: str
     payload: RawPresenceState
@@ -146,7 +146,7 @@ class PresenceStateMessage(BaseModel):
 
 class PresenceDiffMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.presence_diff]
     topic: str
     payload: RawPresenceDiff
@@ -155,7 +155,7 @@ class PresenceDiffMessage(BaseModel):
 
 class ChannelErrorMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.error]
     topic: str
     payload: dict[str, JSON]
@@ -164,11 +164,20 @@ class ChannelErrorMessage(BaseModel):
 
 class ChannelCloseMessage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     event: Literal[ChannelEvents.close]
     topic: str
     payload: dict[str, JSON]
     ref: str | None
+
+
+class ChannelLeaveMessage(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    event: Literal[ChannelEvents.leave]
+    topic: str
+    payload: dict[str, JSON]
+    ref: str
 
 
 ServerMessage: TypeAlias = Annotated[
@@ -178,8 +187,9 @@ ServerMessage: TypeAlias = Annotated[
     | PresenceDiffMessage
     | PostgresChangesMessage
     | ChannelErrorMessage
-    | ChannelCloseMessage
-    , Field(discriminator='event')]
+    | ChannelCloseMessage,
+    Field(discriminator="event"),
+]
 ServerMessageAdapter: TypeAdapter[ServerMessage] = TypeAdapter(ServerMessage)
 
 ClientMessage: TypeAlias = (
@@ -188,4 +198,5 @@ ClientMessage: TypeAlias = (
     | BroadcastMessage
     | PresenceMessage
     | AccessTokenMessage
+    | ChannelLeaveMessage
 )

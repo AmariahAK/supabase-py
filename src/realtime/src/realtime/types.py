@@ -101,18 +101,20 @@ class PostgresChangesData(TypedDict):
     record: NotRequired[dict[str, Any] | None]
     old_record: NotRequired[dict[str, Any]]  # todo: improve this
 
+
 class PostgresChangesBindingDict(TypedDict):
     event: RealtimePostgresChangesListenEvent
     table: NotRequired[str]
     schema: NotRequired[str]
     filter: NotRequired[str]
     id: NotRequired[int]
-    
+
+
 @dataclass
 class PostgresChangesBinding:
     event: RealtimePostgresChangesListenEvent
     table: str | None
-    schema: str | None 
+    schema: str | None
     filter: str | None
     id: int | None = None
 
@@ -125,6 +127,7 @@ class PostgresChangesBinding:
         if self.filter is not None:
             binding["filter"] = self.filter
         return binding
+
 
 class PostgresChangesPayload(TypedDict):
     data: PostgresChangesData

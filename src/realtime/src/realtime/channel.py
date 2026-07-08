@@ -41,7 +41,6 @@ from .message import (
 )
 from .presence import PresenceEvent, RealtimePresence
 from .timer import AsyncTimer
-from .transformers import http_endpoint_url
 from .types import (
     BroadcastPayload,
     Callback,
@@ -65,9 +64,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class RealtimeChannelOptions:
-    
     broadcast_ack: bool = False
     broadcast_self: bool = False
     broadcast_replay_since: int | None = None
@@ -76,9 +75,18 @@ class RealtimeChannelOptions:
     presence_enabled: bool = False
     is_private: bool = False
     token: str | None = None
-    postgres_changes_bindings: list[PostgresChangesBinding] = field(default_factory=list)
+    postgres_changes_bindings: list[PostgresChangesBinding] = field(
+        default_factory=list
+    )
 
-    def broadcast(self, ack: bool = False, listen_self: bool = False, replay: float | None = None, replay_since: int | None= None, replay_limit: int | None = None) -> RealtimeChannelOptions:
+    def broadcast(
+        self,
+        ack: bool = False,
+        listen_self: bool = False,
+        replay: float | None = None,
+        replay_since: int | None = None,
+        replay_limit: int | None = None,
+    ) -> RealtimeChannelOptions:
         self.broadcast_ack = ack
         self.broadcast_self = listen_self
         self.broadcast_replay_since = replay_since
@@ -98,13 +106,16 @@ class RealtimeChannelOptions:
         self.token = token
         return self
 
-    def postgres_changes(self, event: RealtimePostgresChangesListenEvent, table: str | None = None, schema: str | None = None, filter: str | None = None, id: int | None = None) -> RealtimeChannelOptions:
+    def postgres_changes(
+        self,
+        event: RealtimePostgresChangesListenEvent,
+        table: str | None = None,
+        schema: str | None = None,
+        filter: str | None = None,
+        id: int | None = None,
+    ) -> RealtimeChannelOptions:
         binding = PostgresChangesBinding(
-            event=event,
-            table=table,
-            schema=schema,
-            filter=filter,
-            id=id
+            event=event, table=table, schema=schema, filter=filter, id=id
         )
         self.postgres_changes_bindings.append(binding)
         return self
@@ -121,7 +132,9 @@ class RealtimeChannelOptions:
                     "key": self.presence_key,
                     "enabled": self.presence_enabled,
                 },
-                "postgres_changes": [ binding.as_dict() for binding in self.postgres_changes_bindings],
+                "postgres_changes": [
+                    binding.as_dict() for binding in self.postgres_changes_bindings
+                ],
             }
         }
         if self.token is not None:
@@ -133,8 +146,17 @@ class RealtimeChannelOptions:
             payload["config"]["broadcast"]["replay"] = replay
         return payload
 
-ChannelMessage: TypeAlias = SystemMessage | BroadcastMessage | PostgresChangesMessage | ChannelErrorMessage | ChannelCloseMessage | PresenceEvent
-    
+
+ChannelMessage: TypeAlias = (
+    SystemMessage
+    | BroadcastMessage
+    | PostgresChangesMessage
+    | ChannelErrorMessage
+    | ChannelCloseMessage
+    | PresenceEvent
+)
+
+
 class RealtimeChannel:
     """
     Channel is an abstraction for a topic subscription on an existing socket connection.
@@ -191,7 +213,9 @@ class RealtimeChannel:
         logger.info(f"Subscribe reply: {msg!r}")
         self.join_ref = self.socket._make_ref()
         if msg.payload.status != "ok":
-            raise Exception(f"error while subscribing to channel: {msg.payload.response!r}")
+            raise Exception(
+                f"error while subscribing to channel: {msg.payload.response!r}"
+            )
         return msg
 
     @property
@@ -201,10 +225,14 @@ class RealtimeChannel:
             message = await self.socket.get_message_or_raise(get_task)
             server_message = ServerMessageAdapter.validate_python(message)
             if isinstance(server_message, PresenceStateMessage):
-                for presence_event in self.presence._on_state_event(server_message.payload):
+                for presence_event in self.presence._on_state_event(
+                    server_message.payload
+                ):
                     yield presence_event
             elif isinstance(server_message, PresenceDiffMessage):
-                for presence_event in self.presence._on_diff_event(server_message.payload):
+                for presence_event in self.presence._on_diff_event(
+                    server_message.payload
+                ):
                     yield presence_event
             else:
                 yield server_message
@@ -273,11 +301,11 @@ class RealtimeChannel:
         else:
             await self.send_event_no_wait(ChannelEvents.broadcast, payload)
             return None
-            
+
     # Internal methods
 
     def _broadcast_endpoint_url(self):
-        return f"{http_endpoint_url(self.socket.http_endpoint)}/api/broadcast"
+        return self.socket.http_endpoint.joinpath("api", "broadcast")
 
     def _can_push(self):
         return self.socket.is_connected and self.joined

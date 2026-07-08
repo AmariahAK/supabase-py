@@ -34,7 +34,7 @@ async def test_presence(socket: RealtimeClient):
     user2 = {"user_id": "2", "online_at": datetime.datetime.now().isoformat()}
 
     async with socket.channel("room") as chan:
-        res  = await chan.track(user1)
+        res = await chan.track(user1)
         messages_stream = chan.messages()
         fst_join = await messages_stream.__anext__()
         if not isinstance(fst_join, PresenceJoin):
@@ -44,7 +44,7 @@ async def test_presence(socket: RealtimeClient):
 
         assert len(presences) == 1
         assert len(presences[0][1]) == 1
-        assert presences[0][1][0].get("user_id", "") == user1["user_id"] 
+        assert presences[0][1][0].get("user_id", "") == user1["user_id"]
         assert presences[0][1][0].get("online_at", "") == user1["online_at"]
         assert "presence_ref" in presences[0][1][0]
 
@@ -70,6 +70,7 @@ async def test_presence(socket: RealtimeClient):
             raise Exception("unexpected message")
         assert chan.presence.state == {}
         assert fst_leave != snd_leave
+
 
 def test_transform_state_raw_presence_state() -> None:
     raw_state: RawPresenceState = {
@@ -135,6 +136,7 @@ def test_transform_state_additional_fields() -> None:
     result = _transform_state(state_with_additional_fields)
     assert result == expected_output
 
+
 def test_presence_config_includes_enabled_field() -> None:
     """Test that presence config correctly includes enabled flag."""
     from realtime.types import RealtimeChannelPresenceConfig
@@ -148,4 +150,3 @@ def test_presence_config_includes_enabled_field() -> None:
     config_disabled: RealtimeChannelPresenceConfig = {"key": "", "enabled": False}
     assert config_disabled["key"] == ""
     assert config_disabled["enabled"] == False
-

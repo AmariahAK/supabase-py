@@ -22,11 +22,12 @@ from warnings import warn
 import websockets
 from pydantic import ValidationError
 from websockets.asyncio.client import ClientConnection
+from yarl import URL
+from yarl._query import get_str_query
 
 from .channel import RealtimeChannel, RealtimeChannelOptions
 from .exceptions import NotConnectedError
 from .message import Message, ReplyMessage, ServerMessage
-from .transformers import http_endpoint_url
 from .types import (
     DEFAULT_HEARTBEAT_INTERVAL,
     DEFAULT_TIMEOUT,
@@ -35,9 +36,22 @@ from .types import (
     ChannelEvents,
     ChannelStates,
 )
-from .utils import is_ws_url
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_url(url: URL, token: str | None) -> URL:
+    if url.scheme not in {"ws", "wss", "http", "https"}:
+        raise ValueError("url must be a valid WebSocket URL or HTTP URL string")
+    url = url.joinpath("websocket")
+    if token:
+        url = url.with_query(**url.query, apikey=token)
+    if url.scheme in {"ws", "wss"}:
+        return url
+    if url.scheme == "https":
+        return url.with_scheme("wss")
+    return url.with_scheme("ws")
+
 
 class connect_once:
     def __init__(
@@ -46,12 +60,8 @@ class connect_once:
         token: str | None = None,
         params: Dict[str, Any] | None = None,
     ) -> None:
-        if not is_ws_url(url):
-            raise ValueError("url must be a valid WebSocket URL or HTTP URL string")
-        self.url = f"{re.sub(r'https://', 'wss://', re.sub(r'http://', 'ws://', url, flags=re.IGNORECASE), flags=re.IGNORECASE)}/websocket"
+        self.url = normalize_url(URL(url), token)
         self.token = token
-        if token:
-            self.url += f"?apikey={token}"
         self.listen_task: asyncio.Task | None = None
         self.heartbeat_task: asyncio.Task | None = None
 
@@ -59,7 +69,7 @@ class connect_once:
         return self.__await_impl__().__await__()
 
     async def __await_impl__(self) -> "RealtimeClient":
-        self.ws = await websockets.connect(self.url)
+        self.ws = await websockets.connect(str(self.url))
         self.client = RealtimeClient(self.url, self.ws, self.token)
         self.listen_task = asyncio.create_task(self.client.listen())
         self.heartbeat_task = asyncio.create_task(self.client.heartbeat())
@@ -80,28 +90,45 @@ class connect_once:
         self.heartbeat_task.cancel()
         await self.client.close()
 
+
 class MaxRetriesExceeded(Exception):
     pass
 
-async def automatically_reconnect(url: str, token: str, client_handler: Callable[["RealtimeClient"], Awaitable[None]], max_retries: int=3) -> None:
+
+def exponential_delay(max_retries: int, retry_count: int) -> float | None:
+    if retry_count == max_retries:
+        return None
+    return 2**retry_count
+
+
+async def automatically_reconnect(
+    url: str,
+    token: str,
+    client_handler: Callable[["RealtimeClient"], Awaitable[None]],
+    max_retries: int = 3,
+) -> None:
+    retries = 0
     while True:
-        retries = 0
         try:
-            client = await connect_once(url, token)
-            retries = 0
-            await client_handler(client)
-            break
-        except websockets.ConnectionClosedError:
+            async with connect_once(url, token) as client:
+                retries = 0
+                await client_handler(client)
+                break
+        except websockets.ConnectionClosed:
             continue
-        except TimeoutError:
+        except (TimeoutError, OSError):
             retries += 1
-            if retries > max_retries:
-                raise MaxRetriesExceeded()
+            delay = exponential_delay(max_retries, retries)
+            if delay is not None:
+                await asyncio.sleep(delay)
+            else:
+                raise MaxRetriesExceeded(retries)
+
 
 class RealtimeClient:
     def __init__(
         self,
-        url: str,
+        url: URL,
         ws_connection: ClientConnection,
         token: str | None = None,
         hb_interval: int = DEFAULT_HEARTBEAT_INTERVAL,
@@ -110,7 +137,7 @@ class RealtimeClient:
         self.ack = ack
         self.url = url
         self.access_token = token
-        self.http_endpoint = http_endpoint_url(url)
+        self.http_endpoint = url.with_scheme("https").with_path("")
         self.hb_interval = hb_interval
         self._ws_connection: ClientConnection = ws_connection
         self.ref = 0
@@ -128,7 +155,8 @@ class RealtimeClient:
         :return: None
         """
         try:
-            async for msg in self._ws_connection:
+            while True:
+                msg = await self._ws_connection.recv(decode=False)
                 try:
                     message = Message.model_validate_json(msg)
                 except ValidationError as e:
@@ -140,8 +168,14 @@ class RealtimeClient:
                     asyncio.create_task(channel.message_stream.put(message))
                 else:
                     logger.info(f"Ignoring message: {message!r}")
+        except asyncio.CancelledError:
+            return
         except Exception as exc:
-            self._connection_failure.set_exception(exc)
+            if (
+                not self._connection_failure.done()
+                or self._connection_failure.cancelled()
+            ):
+                self._connection_failure.set_exception(exc)
 
     async def close(self) -> None:
         """
@@ -158,8 +192,7 @@ class RealtimeClient:
 
     async def get_message_or_raise(self, fut: asyncio.Future[Message]) -> Message:
         done, pending = await asyncio.wait(
-            (fut, self._connection_failure),
-            return_when=asyncio.FIRST_COMPLETED
+            (fut, self._connection_failure), return_when=asyncio.FIRST_COMPLETED
         )
         if self._connection_failure in done:
             fut.cancel()
@@ -176,11 +209,18 @@ class RealtimeClient:
                     ref=self._make_ref(),
                 )
                 logger.info("sending heartbeat")
-                res = await self.send(data)
+                async with asyncio.timeout(5):
+                    res = await self.send(data)
                 logger.info(f"heartbeat response: {res!r}")
                 await asyncio.sleep(max(self.hb_interval, 15))
-        except websockets.ConnectionClosed as exc:
-            self._connection_failure.set_exception(exc)
+        except asyncio.CancelledError:
+            return
+        except (websockets.ConnectionClosed, asyncio.TimeoutError) as exc:
+            if (
+                not self._connection_failure.done()
+                or self._connection_failure.cancelled()
+            ):
+                self._connection_failure.set_exception(exc)
 
     def channel(
         self, topic: str, params: RealtimeChannelOptions | None = None
@@ -235,7 +275,11 @@ class RealtimeClient:
         tasks = []
         for channel in self.channels.values():
             if channel.joined and channel.state == ChannelStates.JOINED:
-                task = asyncio.create_task(channel.send_event(ChannelEvents.access_token, {"access_token": token}))
+                task = asyncio.create_task(
+                    channel.send_event(
+                        ChannelEvents.access_token, {"access_token": token}
+                    )
+                )
                 tasks.append(task)
         if tasks:
             await asyncio.wait(tasks)
@@ -246,7 +290,7 @@ class RealtimeClient:
 
     async def send(self, message: Message) -> ReplyMessage:
         assert message.ref, "Cannot wait for reponse on a message without ref"
-        
+
         message_str = message.model_dump_json()
         logger.debug(f"sending: {message_str}")
 
@@ -254,10 +298,10 @@ class RealtimeClient:
         self.message_refs[message.ref] = receive
         await self._ws_connection.send(message_str)
         logger.debug(f"waiting for ref='{message.ref}'")
-        
+
         response = await self.get_message_or_raise(receive)
         del self.message_refs[message.ref]
-        
+
         return ReplyMessage.model_validate(response)
 
     async def send_no_wait(self, message: Message) -> None:
