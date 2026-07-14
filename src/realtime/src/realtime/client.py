@@ -162,14 +162,12 @@ class RealtimeClient:
                 except ValidationError as e:
                     logger.error(f"Unrecognized message format {msg!r}\n{e}")
                     continue
-                if (ref := message.ref) and self.ack:
-                    self.message_refs[ref].set_result(message)
+                if (message.ref is not None) and self.ack:
+                    self.message_refs[message.ref].set_result(message)
                 elif channel := self.channels.get(message.topic):
-                    asyncio.create_task(channel.message_stream.put(message))
+                    await channel.message_stream.put(message)
                 else:
                     logger.info(f"Ignoring message: {message!r}")
-        except asyncio.CancelledError:
-            return
         except Exception as exc:
             if (
                 not self._connection_failure.done()

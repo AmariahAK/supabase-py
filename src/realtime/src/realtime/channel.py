@@ -189,7 +189,6 @@ class RealtimeChannel:
 
     async def __aenter__(self) -> RealtimeChannel:
         await self.subscribe()
-        self.message_stream = asyncio.Queue()
         return self
 
     async def __aexit__(self, *args) -> None:

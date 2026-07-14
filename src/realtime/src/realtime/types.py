@@ -142,6 +142,7 @@ class BroadcastMeta(TypedDict, total=False):
 class BroadcastPayload(TypedDict):
     event: str
     payload: dict[str, Any]
+    type: NotRequired[str]
     meta: NotRequired[BroadcastMeta]
 
 

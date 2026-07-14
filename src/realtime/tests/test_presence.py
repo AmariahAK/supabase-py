@@ -35,7 +35,7 @@ async def test_presence(socket: RealtimeClient):
 
     async with socket.channel("room") as chan:
         res = await chan.track(user1)
-        messages_stream = chan.messages()
+        messages_stream = chan.messages
         fst_join = await messages_stream.__anext__()
         if not isinstance(fst_join, PresenceJoin):
             raise Exception("unexpected message")

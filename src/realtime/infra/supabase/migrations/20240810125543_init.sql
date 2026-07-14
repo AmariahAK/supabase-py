@@ -19,26 +19,6 @@ FOR ALL
 TO AUTHENTICATED
 USING (TRUE);
 
-CREATE FUNCTION public.resend_broadcasts_to_private_test_channel()
-RETURNS trigger
-SECURITY DEFINER
-LANGUAGE plpgsql AS $$
-BEGIN
-  IF (select realtime.topic()) = "test-private-channel" THEN
-    PERFORM realtime.send(
-      jsonb_build_object("test"),
-      "broadcast",
-      "topic:test-private-channel-replay",
-      TRUE
-    );
-  END IF;
-  RETURN NULL;
-END $$; 
-
-CREATE TRIGGER resend_broadcasts_on_test_channel
-AFTER INSERT OR UPDATE ON "realtime"."messages"
-FOR EACH ROW EXECUTE FUNCTION public.resend_broadcasts_to_private_test_channel();
-
 ALTER publication supabase_realtime
     ADD TABLE todos;
 
@@ -60,3 +40,19 @@ GRANT ALL ON TABLE public.messages TO anon, authenticated;
 
 -- Grant sequence usage for tables with generated identity primary keys
 GRANT USAGE, SELECT ON SEQUENCE public.messages_id_seq TO anon, authenticated;
+
+CREATE OR replace FUNCTION public.send_realtime(
+    topic text,
+    event text,
+    payload jsonb,
+    private boolean default True
+)
+RETURNS void
+LANGUAGE SQL
+SECURITY DEFINER
+AS $$
+    SELECT realtime.send(payload, topic, event, private);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.send_realtime(text,text,jsonb,boolean)
+TO anon, authenticated, service_role;
