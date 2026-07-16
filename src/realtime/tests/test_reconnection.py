@@ -104,7 +104,7 @@ async def test_raises_on_send_broadcast(server: RealtimeServer) -> None:
         try:
             await channel.send_broadcast("test", {})
         except ConnectionClosedOK:
-            return None
+            return
         raise Exception("should have raised a connection error, but got nothing")
 
 

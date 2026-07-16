@@ -91,7 +91,7 @@ async def realtime_send(
         "Content-Type": "application/json",
     }
     data = {
-        "payload": json.dumps(payload),
+        "payload": payload,
         "topic": topic,
         "event": event,
         "private": True,
@@ -306,40 +306,39 @@ async def delete_todo(access_token: str, id: str):
                 raise Exception(f"Failed to delete todo. Status: {response.status}")
 
 
-# @pytest.mark.asyncio
-# async def test_subscribe_to_private_channel_with_broadcast_replay(
-#     socket: RealtimeClient,
-# ):
-#     """Test that channel subscription sends correct payload with broadcast replay configuration."""
-#     token = await access_token()
+@pytest.mark.asyncio
+async def test_subscribe_to_private_channel_with_broadcast_replay(
+    socket: RealtimeClient,
+):
+    """Test that channel subscription sends correct payload with broadcast replay configuration."""
+    token = await access_token()
 
-#     await socket.set_auth(token)
+    await socket.set_auth(token)
 
-#     messages = 10
+    messages = 10
 
-#     topic = "test-channel"
-#     event = "broadcast"
+    topic = "test-channel"
+    event = "broadcast"
 
-#     # Calculate replay timestamp
-#     ten_mins_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
-#     ten_mins_ago_ms = int(ten_mins_ago.timestamp() * 1000)
+    # Calculate replay timestamp
+    ten_mins_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
+    ten_mins_ago_ms = int(ten_mins_ago.timestamp() * 1000)
 
-#     channel_options = (
-#         RealtimeChannelOptions()
-#         .private(True)
-#         .broadcast(replay_since=ten_mins_ago_ms, replay_limit=messages)
-#         .access_token(token)
-#     )
+    channel_options = (
+        RealtimeChannelOptions()
+        .private(True)
+        .broadcast(replay_since=ten_mins_ago_ms, replay_limit=messages)
+        .access_token(token)
+    )
 
+    for i in range(messages):
+        await realtime_send(token, topic, event, {"i": str(i)})
 
-#     for i in range(messages):
-#         await realtime_send(token, topic, event, {"i": str(i)})
-
-#     async with socket.channel(
-#         topic, params=channel_options
-#     ) as chan:
-#         message_stream = chan.messages
-#         while True:
-#             broadcast = await message_stream.__anext__()
-#             print("found:", broadcast.__repr__())
-#             assert isinstance(broadcast, BroadcastMessage)
+    async with socket.channel(topic, params=channel_options) as chan:
+        message_stream = chan.messages
+        for i in range(messages):
+            broadcast = await message_stream.__anext__()
+            assert isinstance(broadcast, BroadcastMessage)
+            assert broadcast.payload["payload"]["i"] == str(i)
+            assert broadcast.payload["meta"]
+            assert broadcast.payload["meta"]["replayed"]

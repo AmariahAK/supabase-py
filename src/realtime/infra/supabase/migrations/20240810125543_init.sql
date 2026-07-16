@@ -51,8 +51,7 @@ RETURNS void
 LANGUAGE SQL
 SECURITY DEFINER
 AS $$
-    SELECT realtime.send(payload, topic, event, private);
+    SELECT realtime.send(payload, event, topic, private);
 $$;
 
-GRANT EXECUTE ON FUNCTION public.send_realtime(text,text,jsonb,boolean)
-TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.send_realtime(text,text,jsonb,boolean) TO anon, authenticated, service_role;

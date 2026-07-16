@@ -84,9 +84,9 @@ class connect_once:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        assert self.listen_task, "Should never exit without listen_task"
+        assert self.listen_task, "Connection should never exit without listen_task"
         self.listen_task.cancel()
-        assert self.heartbeat_task, "Should never exit without hearbeat_task"
+        assert self.heartbeat_task, "Connection should never exit without hearbeat_task"
         self.heartbeat_task.cancel()
         await self.client.close()
 
