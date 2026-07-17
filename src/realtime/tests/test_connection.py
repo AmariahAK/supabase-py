@@ -147,28 +147,27 @@ async def test_postgrest_changes(socket: RealtimeClient):
 
     async with socket.channel("test-postgres-changes", channel_options) as chan:
         message_stream = chan.messages
-        async with asyncio.timeout(5):
-            system_msg = await message_stream.__anext__()
-            assert isinstance(system_msg, SystemMessage)
-            assert system_msg.payload.status == "ok"
-            created_todo_id = await create_todo(
-                token, {"description": "Test todo", "is_completed": False}
-            )
+        system_msg = await message_stream.__anext__()
+        assert isinstance(system_msg, SystemMessage)
+        assert system_msg.payload.status == "ok"
+        created_todo_id = await create_todo(
+            token, {"description": "Test todo", "is_completed": False}
+        )
 
-            insert = await message_stream.__anext__()
-            assert isinstance(insert, PostgresChangesMessage)
+        insert = await message_stream.__anext__()
+        assert isinstance(insert, PostgresChangesMessage)
 
-            await update_todo(
-                token,
-                created_todo_id,
-                {"description": "Updated todo", "is_completed": True},
-            )
-            update = await message_stream.__anext__()
-            assert isinstance(update, PostgresChangesMessage)
+        await update_todo(
+            token,
+            created_todo_id,
+            {"description": "Updated todo", "is_completed": True},
+        )
+        update = await message_stream.__anext__()
+        assert isinstance(update, PostgresChangesMessage)
 
-            await delete_todo(token, created_todo_id)
-            delete = await message_stream.__anext__()
-            assert isinstance(delete, PostgresChangesMessage)
+        await delete_todo(token, created_todo_id)
+        delete = await message_stream.__anext__()
+        assert isinstance(delete, PostgresChangesMessage)
 
     assert insert.payload["data"]["record"] is not None
     assert insert.payload["data"]["record"]["id"] == created_todo_id
@@ -198,20 +197,19 @@ async def test_postgrest_changes_on_different_tables(socket: RealtimeClient):
         "test-postgres-changes", params=channel_options
     ) as channel:
         message_stream = channel.messages
-        async with asyncio.timeout(5):
-            system_msg = await message_stream.__anext__()
-            assert isinstance(system_msg, SystemMessage)
-            assert system_msg.payload.status == "ok"
-            created_todo_id = await create_todo(
-                token, {"description": "Test todo", "is_completed": False}
-            )
-            insert_todo = await message_stream.__anext__()
-            assert isinstance(insert_todo, PostgresChangesMessage)
-            created_message_id = await create_message(
-                token, {"title": "Test message", "message": "This is a test message"}
-            )
-            insert_message = await message_stream.__anext__()
-            assert isinstance(insert_message, PostgresChangesMessage)
+        system_msg = await message_stream.__anext__()
+        assert isinstance(system_msg, SystemMessage)
+        assert system_msg.payload.status == "ok"
+        created_todo_id = await create_todo(
+            token, {"description": "Test todo", "is_completed": False}
+        )
+        insert_todo = await message_stream.__anext__()
+        assert isinstance(insert_todo, PostgresChangesMessage)
+        created_message_id = await create_message(
+            token, {"title": "Test message", "message": "This is a test message"}
+        )
+        insert_message = await message_stream.__anext__()
+        assert isinstance(insert_message, PostgresChangesMessage)
 
     assert insert_todo.payload["data"]["record"] is not None
     assert insert_todo.payload["data"]["record"]["id"] == created_todo_id

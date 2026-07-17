@@ -98,7 +98,8 @@ class MaxRetriesExceeded(Exception):
 def exponential_delay(max_retries: int, retry_count: int) -> float | None:
     if retry_count == max_retries:
         return None
-    return 2**retry_count
+    else:
+        return float(2**retry_count)
 
 
 async def automatically_reconnect(
@@ -133,6 +134,7 @@ class RealtimeClient:
         token: str | None = None,
         hb_interval: int = DEFAULT_HEARTBEAT_INTERVAL,
         ack: bool = True,
+        heartbeat_timeout: int = 5,
     ) -> None:
         self.ack = ack
         self.url = url
@@ -144,6 +146,7 @@ class RealtimeClient:
         self.channels: Dict[str, RealtimeChannel] = {}
         self.message_refs: Dict[str, asyncio.Future[Message]] = {}
         self._connection_failure: asyncio.Future[Message] = asyncio.Future()
+        self.heartbeat_timeout = heartbeat_timeout
 
     @property
     def is_connected(self) -> bool:
@@ -194,6 +197,7 @@ class RealtimeClient:
         )
         if self._connection_failure in done:
             fut.cancel()
+            # raise the exception
             await self._connection_failure
         return fut.result()
 
@@ -207,8 +211,9 @@ class RealtimeClient:
                     ref=self._make_ref(),
                 )
                 logger.info("sending heartbeat")
-                async with asyncio.timeout(5):
-                    res = await self.send(data)
+                res = await asyncio.wait_for(
+                    self.send(data), timeout=self.heartbeat_timeout
+                )
                 logger.info(f"heartbeat response: {res!r}")
                 await asyncio.sleep(max(self.hb_interval, 15))
         except asyncio.CancelledError:
@@ -308,15 +313,5 @@ class RealtimeClient:
         await self._ws_connection.send(message_str)
 
     def endpoint_url(self) -> str:
-        parsed_url = urlparse(self.url)
-        query = urlencode({"vsn": VSN}, doseq=True)
-        return urlunparse(
-            (
-                parsed_url.scheme,
-                parsed_url.netloc,
-                parsed_url.path,
-                parsed_url.params,
-                query,
-                parsed_url.fragment,
-            )
-        )
+        query = self.url.with_query(**self.url.query, vsn=VSN)
+        return str(query)

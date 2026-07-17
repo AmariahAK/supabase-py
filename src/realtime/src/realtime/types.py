@@ -163,32 +163,32 @@ class PresenceOpts:
 
 
 # TypedDicts
-class ReplayOption(TypedDict, total=False):
+class ReplayOption(BaseModel):
     since: int
-    limit: NotRequired[int]
+    limit: int | None
 
 
-class RealtimeChannelBroadcastConfig(TypedDict, total=False):
+class RealtimeChannelBroadcastConfig(BaseModel):
     ack: bool
     self: bool
-    replay: NotRequired[ReplayOption]
+    replay: ReplayOption | None = None
 
 
-class RealtimeChannelPresenceConfig(TypedDict):
+class RealtimeChannelPresenceConfig(BaseModel):
     key: str
     enabled: bool
 
 
-class RealtimeChannelConfig(TypedDict):
+class RealtimeChannelConfig(BaseModel):
     broadcast: RealtimeChannelBroadcastConfig
     presence: RealtimeChannelPresenceConfig
     postgres_changes: list[PostgresChangesBindingDict]
     private: bool
 
 
-class RealtimeChannelOptionsPayload(TypedDict):
-    config: NotRequired[RealtimeChannelConfig]
-    access_token: NotRequired[str]
+class RealtimeChannelOptionsPayload(BaseModel):
+    config: RealtimeChannelConfig
+    access_token: str | None = None
 
 
 @with_config(ConfigDict(extra="allow"))

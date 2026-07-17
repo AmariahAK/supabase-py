@@ -121,29 +121,32 @@ class RealtimeChannelOptions:
         return self
 
     def to_payload(self) -> RealtimeChannelOptionsPayload:
-        payload: RealtimeChannelOptionsPayload = {
-            "config": {
-                "private": self.is_private,
-                "broadcast": {
-                    "ack": self.broadcast_ack,
-                    "self": self.broadcast_self,
-                },
-                "presence": {
-                    "key": self.presence_key,
-                    "enabled": self.presence_enabled,
-                },
-                "postgres_changes": [
+        replay = (
+            ReplayOption(
+                since=self.broadcast_replay_since,
+                limit=self.broadcast_replay_limit,
+            )
+            if self.broadcast_replay_since is not None
+            else None
+        )
+        payload = RealtimeChannelOptionsPayload(
+            access_token=self.token,
+            config=RealtimeChannelConfig(
+                private=self.is_private,
+                broadcast=RealtimeChannelBroadcastConfig(
+                    ack=self.broadcast_ack,
+                    self=self.broadcast_self,
+                    replay=replay,
+                ),
+                presence=RealtimeChannelPresenceConfig(
+                    key=self.presence_key,
+                    enabled=self.presence_enabled,
+                ),
+                postgres_changes=[
                     binding.as_dict() for binding in self.postgres_changes_bindings
                 ],
-            }
-        }
-        if self.token is not None:
-            payload["access_token"] = self.token
-        if self.broadcast_replay_since is not None:
-            replay = ReplayOption(since=self.broadcast_replay_since)
-            if self.broadcast_replay_limit is not None:
-                replay["limit"] = self.broadcast_replay_limit
-            payload["config"]["broadcast"]["replay"] = replay
+            ),
+        )
         return payload
 
 
@@ -201,10 +204,11 @@ class RealtimeChannel:
     async def subscribe(self) -> ReplyMessage:
         if self.params.token is None:
             self.params.token = self.socket.access_token
+        payload = self.params.to_payload()
         message = Message(
             topic=self.topic,
             event=ChannelEvents.join,
-            payload=self.params.to_payload(),
+            payload=payload.model_dump(exclude_none=True),
             ref=self.socket._make_ref(),
             join_ref=None,
         )

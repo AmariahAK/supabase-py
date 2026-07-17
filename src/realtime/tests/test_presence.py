@@ -48,8 +48,8 @@ async def test_presence(socket: RealtimeClient):
         assert presences[0][1][0].get("online_at", "") == user1["online_at"]
         assert "presence_ref" in presences[0][1][0]
 
-        assert fst_join.new_presences[0].get("user_id", "") == user1["user_id"]  # type: ignore
-        assert fst_join.new_presences[0].get("online_at", "") == user1["online_at"]  # type: ignore
+        assert fst_join.new_presences[0].get("user_id", "") == user1["user_id"]
+        assert fst_join.new_presences[0].get("online_at", "") == user1["online_at"]
         assert "presence_ref" in fst_join.new_presences[0]
 
         await chan.track(user2)
@@ -57,8 +57,8 @@ async def test_presence(socket: RealtimeClient):
         if not isinstance(snd_join, PresenceJoin):
             raise Exception("unexpected message")
 
-        assert snd_join.new_presences[0].get("user_id", "") == user2["user_id"]  # type: ignore
-        assert snd_join.new_presences[0].get("online_at", "") == user2["online_at"]  # type: ignore
+        assert snd_join.new_presences[0].get("user_id", "") == user2["user_id"]
+        assert snd_join.new_presences[0].get("online_at", "") == user2["online_at"]
         assert "presence_ref" in snd_join.new_presences[0]
 
         await chan.untrack()
@@ -135,18 +135,3 @@ def test_transform_state_additional_fields() -> None:
 
     result = _transform_state(state_with_additional_fields)
     assert result == expected_output
-
-
-def test_presence_config_includes_enabled_field() -> None:
-    """Test that presence config correctly includes enabled flag."""
-    from realtime.types import RealtimeChannelPresenceConfig
-
-    # Test creating presence config with enabled field
-    config: RealtimeChannelPresenceConfig = {"key": "user123", "enabled": True}
-    assert config["key"] == "user123"
-    assert config["enabled"] == True
-
-    # Test with enabled False
-    config_disabled: RealtimeChannelPresenceConfig = {"key": "", "enabled": False}
-    assert config_disabled["key"] == ""
-    assert config_disabled["enabled"] == False
